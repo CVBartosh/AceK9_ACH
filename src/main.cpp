@@ -397,19 +397,26 @@ void monitor_dev_tick(HardwareSerial& s) {
     }
 }
 void setup() {
-    
      
 
     // your setup code here:
+#ifndef CUSTOM
     XBEE.begin(115200, SERIAL_8N1, 18, 17);
-
+#else
+    XBEE.begin(115200, SERIAL_8N1, 4, 5);
+#endif
     MONITOR.begin(115200);
     MONITOR.printf("Booted\n");
     XBEE_SERPORT.ser = &XBEE;
     XBEE_SERPORT.baudrate = 115200;
     strcpy(XBEE_SERPORT.portname,"XBEE");
+#ifndef CUSTOM
     XBEE_SERPORT.pin_rx = 18;
     XBEE_SERPORT.pin_tx = 17;
+#else
+    XBEE_SERPORT.pin_rx = 4;
+    XBEE_SERPORT.pin_tx = 5;
+#endif
     if (xbee_dev_init(&my_xbee, &XBEE_SERPORT, NULL, NULL)) {
         MONITOR.printf("Failed to initialize device.\n");
         while(1);
