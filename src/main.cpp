@@ -1,12 +1,16 @@
 #define XBEE Serial1
 #define MONITOR Serial
 #include <Arduino.h>
+#include <lvgl.h>
+#include <ui.h>
 #include <interface.h>
 //================================================== MY STUFF =========================================
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "display.hpp"
+#include "input.hpp"
 
 #include "xbee/platform.h"
 #include "xbee/atcmd.h"
@@ -398,6 +402,13 @@ void monitor_dev_tick(HardwareSerial& s) {
 }
 void setup() {
      
+    Wire.begin( 18,8,100*1000);
+    lv_init();
+    display_init();
+    input_init();
+    ui_init();
+    dimmer.max_level(.0625);
+    
 
     // your setup code here:
 #ifndef CUSTOM
@@ -426,6 +437,8 @@ void setup() {
 
 
 void loop() {
+    display_update();
+    lv_timer_handler();
     if(((int)last.status)<0) {
         on_xbee_error(last.cmd, last.status);
     }
