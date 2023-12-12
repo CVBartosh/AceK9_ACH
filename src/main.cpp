@@ -16,14 +16,68 @@
 #include "xbee/tx_status.h"
 #include "xbee/user_data.h"
 
-//================================================== Temperature Values =========================================
+//================================================== Temperature Variables =========================================
 enum TempSign {ts_None,ts_Neg = 45,ts_Pos_IBox = 32, ts_Pos_VIM = 43,ts_Error = 69, ts_Opn = 53, ts_Sho = 52};// Pos = "+" or " ", Neg = "-", Error = "E", Open = "5", Sho = "4"
 enum TempState {tst_OK,tst_Warning,tst_Over, tst_OverPlus,tst_Under};
 struct TempValues{
+    float leftTemp;
+    bool leftTempError;
+    TempSign leftTempSign;
     TempState leftTempState;
+    float rightTemp;
+    bool rightTempError;
+    TempSign rightTempSign;
     TempState rightTempState;
+    float avgTemp;
 };
 
+TempValues tempvalues_current;
+TempValues tempvalues_previous;
+
+//================================================== Battery Variables =========================================*/
+enum BatteryThreshold {B_100=100,B_105=105,B_110=110,B_115=115,B_120=120};
+BatteryThreshold BatterySetting = BatteryThreshold::B_100;
+
+struct BatteryValues{
+    float voltage;
+    bool error;
+};
+
+BatteryValues battvalues_current;
+BatteryValues battvalues_previous;
+
+int BadBatteryCounter=0;
+#define MaxBadBattValCounter 5
+
+//================================================== Engine Stall Variables =========================================*/
+struct EngineValues{
+    bool engineStalled;
+    int engineStallCount;
+    bool engineStallSensorPresent;
+};
+
+EngineValues enginevalues_current;
+EngineValues enginevalues_previous;
+
+//================================================== Aux Variables =========================================*/
+struct AuxValues{
+    bool aux1Active;
+    bool aux2Active;
+};
+
+AuxValues auxvalues_current;
+AuxValues auxvalues_previous;
+
+//================================================== K9 Door Variables =========================================*/
+struct K9DoorValues{
+    bool k9DoorOpen;
+};
+
+K9DoorValues k9doorvalues_current;
+K9DoorValues k9doorvalues_previous;
+
+//================================================== VIM SN Variables =========================================*/
+String VIMSerialNumber;
 
 //================================================== GLOBAL VARIABLES =========================================*/
 
@@ -38,11 +92,11 @@ static config_packet config_data;
 static command_packet command_data;
 
 struct acecon {
-    bool_t alm;
-    bool_t hps;
-    bool_t ppt;
-    bool_t pps;
-    bool_t ign;
+    bool alm;
+    bool hps;
+    bool ppt;
+    bool pps;
+    bool ign;
 };
 acecon acecon_values= {false,false,false,false,false};
 
@@ -52,13 +106,13 @@ struct acedata{
     TempSign rightTempSign;
     float rightTemp;
     float batteryVoltage;
-    bool engineStall;
-    int stallCount;
+    bool engineStallSensorPresent;
+    int EngineStallCount;
+    bool engineStalled;
     bool Aux1Input;
     bool Aux2Input;
-    bool K9Door;
-    String VIMSerialNumber;
-    bool engineStallStatus;
+    bool K9DoorOpen;
+    char VIMSerialNumber[17];
 };
 
 acedata acedata_current;
@@ -80,8 +134,39 @@ acedata acedata_previous;
     #define ACEDATA_RX 47
     #define ACEDATA_TX 48
 
+//================================================== ACEDATA Stuff =========================================
+    #define ACEDATA_Temp1_Sign_POS 11
+    #define ACEDATA_Temp1_1000X_POS 12 
+    #define ACEDATA_Temp1_100X_POS 13 
+    #define ACEDATA_Temp1_10X_POS 14 
+    #define ACEDATA_Temp1_1X_POS 15 
 
-//================================================== XBee HAL Funcitons =========================================*/
+    #define ACEDATA_Temp2_Sign_POS 16
+    #define ACEDATA_Temp2_1000X_POS 17 
+    #define ACEDATA_Temp2_100X_POS 18 
+    #define ACEDATA_Temp2_10X_POS 19 
+    #define ACEDATA_Temp2_1X_POS 20 
+
+    #define ACEDATA_Batt_100X_POS 21
+    #define ACEDATA_Batt_10X_POS 22
+    #define ACEDATA_Batt_1X_POS 23
+
+    #define ACEDATA_Stall_Sensor_Present_POS 91
+    #define ACEDATA_Stall_Count_10X_POS 33
+    #define ACEDATA_Stall_Count_1X_POS 34
+    #define ACEDATA_Stall_Status_POS 32
+
+    #define ACEDATA_Aux1_Input_POS  36
+    #define ACEDATA_Aux2_Input_POS  35
+
+    #define ACEDATA_K9Door_POS  37
+
+    #define ACEDATA_VIM_SN_POS 46
+    #define ACEDATA_VIM_SN_LENGTH 16
+
+
+
+//================================================== XBee HAL Functions =========================================*/
 
 // function that handles received User Data frames
 int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR *context)
@@ -576,6 +661,201 @@ byte ASCII2Num(char asciival){
 	return byte(asciival) - 48;
 }
 
+void acecon_parse_temperature(String str){
+       
+    tempvalues_previous = tempvalues_current;
+    
+    //================================================== Left Temp =========================================*/
+    acedata_current.leftTempSign = (TempSign)(str.charAt(ACEDATA_Temp1_Sign_POS));
+    
+    // Check for Error First
+    if (acedata_current.leftTempSign == static_cast<int>(TempSign::ts_Error)){
+        
+        if (str.charAt(ACEDATA_Temp1_10X_POS) == static_cast<byte>(TempSign::ts_Opn)){
+            acedata_current.leftTempSign = TempSign::ts_Opn;
+        }
+        else if (str.charAt(ACEDATA_Temp1_10X_POS) == static_cast<byte>(TempSign::ts_Sho)){
+            acedata_current.leftTempSign = TempSign::ts_Sho;
+        }
+
+        tempvalues_current.leftTempError = true;
+        tempvalues_current.leftTempSign = acedata_current.leftTempSign;
+
+    }
+    else 
+    {
+        // Parse Temperature Magnitude	
+        acedata_current.leftTemp = static_cast<float>(ASCII2Num(str.charAt(ACEDATA_Temp1_1000X_POS)) * 1000 +
+                                                        ASCII2Num(str.charAt(ACEDATA_Temp1_100X_POS)) * 100 +
+                                                        ASCII2Num(str.charAt(ACEDATA_Temp1_10X_POS)) * 10 +
+                                                        ASCII2Num(str.charAt(ACEDATA_Temp1_1X_POS)))  / 10;
+
+        if(acedata_current.leftTempSign == (TempSign::ts_Neg)){
+            acedata_current.leftTempSign = TempSign::ts_Neg;
+            acedata_current.leftTemp = acedata_current.leftTemp * -1;
+
+            tempvalues_current.leftTemp = acedata_current.leftTemp;
+        }
+        else{
+            acedata_current.leftTempSign = TempSign::ts_Pos_IBox;
+        } 
+
+        tempvalues_current.leftTempError = false;
+
+    }
+
+
+    //================================================== Right Temp =========================================*/
+    acedata_current.rightTempSign = (TempSign)(str.charAt(ACEDATA_Temp2_Sign_POS));
+    
+    // Check for Error First
+    if (acedata_current.rightTempSign == static_cast<int>(TempSign::ts_Error)){
+        
+        if (str.charAt(ACEDATA_Temp2_10X_POS) == static_cast<byte>(TempSign::ts_Opn)){
+            acedata_current.rightTempSign = TempSign::ts_Opn;
+        }
+        else if (str.charAt(ACEDATA_Temp2_10X_POS) == static_cast<byte>(TempSign::ts_Sho)){
+            acedata_current.rightTempSign = TempSign::ts_Sho;
+        }
+
+        tempvalues_current.rightTempError = true;
+        tempvalues_current.rightTempSign = acedata_current.rightTempSign;
+
+    }
+    else{
+        // Parse Temperature Magnitude	
+        acedata_current.rightTemp = static_cast<float>(ASCII2Num(str.charAt(ACEDATA_Temp2_1000X_POS)) * 1000 +
+                                                        ASCII2Num(str.charAt(ACEDATA_Temp2_100X_POS)) * 100 +
+                                                        ASCII2Num(str.charAt(ACEDATA_Temp2_10X_POS)) * 10 +
+                                                        ASCII2Num(str.charAt(ACEDATA_Temp2_1X_POS)))  / 10;
+
+        if(acedata_current.rightTempSign == (TempSign::ts_Neg)){
+            acedata_current.rightTempSign = TempSign::ts_Neg;
+            acedata_current.rightTemp = acedata_current.rightTemp * -1;
+
+            tempvalues_current.rightTemp = acedata_current.rightTemp;
+        }
+        else{
+            acedata_current.rightTempSign = TempSign::ts_Pos_IBox;
+        } 
+
+        tempvalues_current.rightTempError = false;
+
+    }
+
+    // If Both Sensors have not returned an error
+    if (tempvalues_current.leftTempError == false && tempvalues_current.rightTempError == false){
+        tempvalues_current.avgTemp = (tempvalues_current.leftTempError + tempvalues_current.rightTempError)/2;
+    }
+    else
+    {
+        // If a single sensor is failed, used the working sensor value as the average
+        if (tempvalues_current.leftTempError == true && tempvalues_current.rightTempError == false)
+        {
+            tempvalues_current.avgTemp = tempvalues_current.leftTempError;
+        }
+        else if (tempvalues_current.leftTempError == false && tempvalues_current.rightTempError == true)
+        {
+            tempvalues_current.avgTemp = tempvalues_current.rightTempError;
+        }
+
+    }
+}
+
+void acecon_parse_battery(String str){
+       
+    battvalues_previous = battvalues_current;
+    
+    //================================================== Left Temp =========================================*/
+    acedata_current.batteryVoltage = static_cast<float>(ASCII2Num(str.charAt(ACEDATA_Batt_100X_POS)) * 100 +
+                                                        ASCII2Num(str.charAt(ACEDATA_Batt_10X_POS)) * 10 +
+                                                        ASCII2Num(str.charAt(ACEDATA_Batt_1X_POS))  ) / 10;
+    
+    battvalues_current.voltage = acedata_current.batteryVoltage;
+
+    // Check if the Batt Voltage is out of range
+	if (acedata_current.batteryVoltage < BatterySetting/10)
+		{
+            BadBatteryCounter++;
+            if (BadBatteryCounter > MaxBadBattValCounter)
+            {
+                battvalues_current.error = true;
+            }
+		}
+		else
+		{
+            BadBatteryCounter = 0;
+			battvalues_current.error = false;
+		}
+
+}
+
+void acecon_parse_engine_stall(String str){
+
+    enginevalues_previous = enginevalues_current;
+
+    if (str.charAt(ACEDATA_Stall_Status_POS)=='0'){
+        acedata_current.engineStalled = true;
+    }else{
+        acedata_current.engineStalled = false;
+    }
+    enginevalues_current.engineStalled = acedata_current.engineStalled;
+
+    acedata_current.EngineStallCount = static_cast<float>(ASCII2Num(str.charAt(ACEDATA_Stall_Count_10X_POS)) * 10 +
+                                                          ASCII2Num(str.charAt(ACEDATA_Stall_Count_1X_POS)));
+
+    
+    if (str.charAt(ACEDATA_Stall_Sensor_Present_POS) =='A'){
+        acedata_current.engineStallSensorPresent = true;
+    }else{
+        acedata_current.engineStallSensorPresent = false;
+    }
+
+}
+
+void acecon_parse_aux(String str){
+    
+    auxvalues_previous = auxvalues_current;
+
+    if (str.charAt(ACEDATA_Aux1_Input_POS)=='1'){
+        acedata_current.Aux1Input = true;
+    }else{
+        acedata_current.Aux1Input = false;
+    }
+    auxvalues_current.aux1Active = acedata_current.Aux1Input;
+
+    if (str.charAt(ACEDATA_Aux2_Input_POS)=='1'){
+        acedata_current.Aux2Input = true;
+    }else{
+        acedata_current.Aux2Input = false;
+    }
+    auxvalues_current.aux2Active = acedata_current.Aux2Input;
+
+}
+
+void acecon_parse_k9door(String str){
+    
+    k9doorvalues_previous = k9doorvalues_current;
+
+    if (str.charAt(ACEDATA_K9Door_POS)=='1'){
+        acedata_current.K9DoorOpen = true;
+    }else{
+        acedata_current.K9DoorOpen = false;
+    }
+    k9doorvalues_current.k9DoorOpen = acedata_current.K9DoorOpen;
+    
+
+}
+
+void acecon_parse_serialnumber(String str){
+    int i;
+    for (i =0; i<ACEDATA_VIM_SN_LENGTH;i++){
+        VIMSerialNumber[i]=str.charAt(ACEDATA_VIM_SN_POS+i);
+    }
+    VIMSerialNumber[i]=0;
+
+}
+
 void acecon_dev_tick(HardwareSerial& s) {
     
     //================================================== Read ACECON Inputs =========================================*/
@@ -585,93 +865,22 @@ void acecon_dev_tick(HardwareSerial& s) {
 
     //================================================== Read ACEDATA =========================================*/
     if(s.available()) {
-        String str = s.readString();
+        String str = s.readStringUntil('\n');
         MONITOR.printf("ECHO: %s\n",str.c_str());
         String cmd = str;
-        cmd.toLowerCase();
         cmd.trim();
         int index=0;
         int length=10;
         if(cmd.substring(index,length)=="$ACEK9,IH1") {
-
             acedata_previous = acedata_current;
+            acecon_parse_temperature(cmd);
+            acecon_parse_battery(cmd);
+            acecon_parse_engine_stall(cmd);
+            acecon_parse_aux(cmd);
+            acecon_parse_k9door(cmd);
+            acecon_parse_serialnumber(cmd);
 
-            //================================================== Left Temp =========================================*/
-            acedata_current.leftTempSign = (TempSign)(cmd.charAt(11));
-            
-            // Apply Sign to Temperature
-            if (acedata_current.leftTempSign == static_cast<int>(TempSign::ts_Error)){
-                if (cmd.charAt(14) == static_cast<byte>(TempSign::ts_Opn)){
-                    acedata_current.leftTempSign = TempSign::ts_Opn;
-                }
-                else if (cmd.charAt(14) == static_cast<byte>(TempSign::ts_Sho)){
-                    acedata_current.leftTempSign = TempSign::ts_Sho;
-                }
-                else{
-                    acedata_current.leftTempSign = TempSign::ts_Error;
-                }
-            }
-            else 
-            {
-                // Parse Temperature Magnitude	
-                acedata_current.leftTemp = static_cast<float>(ASCII2Num(cmd.charAt(12)) * 1000 +
-                                                                ASCII2Num(cmd.charAt(13)) * 100 +
-                                                                ASCII2Num(cmd.charAt(14)) * 10 +
-                                                                ASCII2Num(cmd.charAt(15)))  / 10;
-
-                if(acedata_current.leftTempSign == (TempSign::ts_Neg)){
-
-                    acedata_current.leftTempSign = TempSign::ts_Neg;
-                    acedata_current.leftTemp = acedata_current.leftTemp * -1;
-                }
-                else{
-                    acedata_current.leftTempSign = TempSign::ts_Pos_IBox;
-                } 
-            }
-
-            //================================================== Right Temp =========================================*/
-            acedata_current.rightTempSign = (TempSign)(cmd.charAt(16));
-            
-            // Apply Sign to Temperature
-            if (acedata_current.rightTempSign == static_cast<int>(TempSign::ts_Error)){
-                if (cmd.charAt(19) == static_cast<byte>(TempSign::ts_Opn)){
-                    acedata_current.rightTempSign = TempSign::ts_Opn;
-                }
-                else if (cmd.charAt(19) == static_cast<byte>(TempSign::ts_Sho)){
-                    acedata_current.rightTempSign = TempSign::ts_Sho;
-                }
-                else{
-                    acedata_current.rightTempSign = TempSign::ts_Error;
-                }
-            }
-            else 
-            {
-                // Parse Temperature Magnitude	
-                acedata_current.rightTemp = static_cast<float>(ASCII2Num(cmd.charAt(17)) * 1000 +
-                                                                ASCII2Num(cmd.charAt(18)) * 100 +
-                                                                ASCII2Num(cmd.charAt(19)) * 10 +
-                                                                ASCII2Num(cmd.charAt(20)))  / 10;
-
-                if(acedata_current.rightTempSign == (TempSign::ts_Neg)){
-
-                    acedata_current.rightTempSign = TempSign::ts_Neg;
-                    acedata_current.rightTemp = acedata_current.rightTemp * -1;
-                }
-                else{
-                    acedata_current.rightTempSign = TempSign::ts_Pos_IBox;
-                } 
-            }
-
-
-        
-
-
-
-        } 
-        
-        
-        
-        
+        }
     }
 
 }
