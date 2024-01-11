@@ -3,7 +3,7 @@
 #define ACECONSerial Serial2
 #include <Arduino.h>
 #include <lvgl.h>
-#include <ui.h>
+#include <Squareline/ui.h>
 #include <interface.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -98,7 +98,8 @@ struct acecon {
     bool pps;
     bool ign;
 };
-acecon acecon_values= {false,false,false,false,false};
+acecon aceconvalues_current = {false,false,false,false,false};
+acecon aceconvalues_previous = {false,false,false,false,false};
 
 struct acedata{
     TempSign leftTempSign;
@@ -660,6 +661,13 @@ void monitor_dev_tick(HardwareSerial& s) {
 byte ASCII2Num(char asciival){
 	return byte(asciival) - 48;
 }
+void ui_update_acedata() {
+    if(acedata_previous.leftTemp!=acedata_current.leftTemp) {
+        static char szLeftTemp[6];
+        sprintf(szLeftTemp,"%3.1f",acedata_current.leftTemp);
+        lv_label_set_text_static(ui_LabelTemp1Val,szLeftTemp);
+    }
+}
 
 void acecon_parse_temperature(String str){
        
@@ -758,7 +766,6 @@ void acecon_parse_temperature(String str){
         {
             tempvalues_current.avgTemp = tempvalues_current.rightTempError;
         }
-
     }
 }
 
@@ -847,6 +854,29 @@ void acecon_parse_k9door(String str){
 
 }
 
+static void ui_switch_handler(lv_event_t * e)
+{
+    
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_VALUE_CHANGED) {
+        bool checked = lv_obj_has_state(obj,LV_STATE_CHECKED);
+        if(obj==ui_SwitchPPT) {
+            MONITOR.printf("PPT Switch %s\r\n",checked?"on":"off");
+            digitalWrite(ACECON_PPT_OUT, checked?HIGH:LOW);
+        } else if(obj==ui_SwitchPPS) {
+            MONITOR.printf("PPS Switch %s\r\n",checked?"on":"off");
+            digitalWrite(ACECON_PPS_OUT, checked?HIGH:LOW);
+        } else if(obj==ui_SwitchALM) {
+            MONITOR.printf("ALM Switch %s\r\n",checked?"on":"off");
+            digitalWrite(ACECON_ALM_OUT, checked?HIGH:LOW);
+        } else if(obj==ui_SwitchHPS) {
+            MONITOR.printf("HPS Switch %s\r\n",checked?"on":"off");
+            digitalWrite(ACECON_HPS_OUT, checked?HIGH:LOW);
+        }
+    }
+}
+
 void acecon_parse_serialnumber(String str){
     int i;
     for (i =0; i<ACEDATA_VIM_SN_LENGTH;i++){
@@ -859,12 +889,38 @@ void acecon_parse_serialnumber(String str){
 void acecon_dev_tick(HardwareSerial& s) {
     
     //================================================== Read ACECON Inputs =========================================*/
-    acecon_values.ppt = digitalRead(ACECON_POP_IN);
-    acecon_values.pps = digitalRead(ACECON_PPS_IN);
-    acecon_values.ign = digitalRead(ACECON_IGN_IN);
-
+    aceconvalues_previous = aceconvalues_current;
+    aceconvalues_current.ppt = digitalRead(ACECON_POP_IN);
+    aceconvalues_current.pps = digitalRead(ACECON_PPS_IN);
+    aceconvalues_current.ign = digitalRead(ACECON_IGN_IN);
+    if(aceconvalues_previous.ppt != aceconvalues_current.ppt) {
+        MONITOR.printf("PPT Val Changed to  %s\r\n",aceconvalues_current.ppt?"HIGH":"LOW");
+        if(aceconvalues_current.ppt) {
+            lv_obj_add_state(ui_SwitchPPT, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_SwitchPPT, LV_STATE_CHECKED);
+        }
+    }
+    if(aceconvalues_previous.pps != aceconvalues_current.pps) {
+        MONITOR.printf("PPS Val Changed to  %s\r\n",aceconvalues_current.pps?"HIGH":"LOW");
+        if(aceconvalues_current.pps) {
+            lv_obj_add_state(ui_SwitchPPS, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_SwitchPPS, LV_STATE_CHECKED);
+        }
+    }
+    if(aceconvalues_previous.ign != aceconvalues_current.ign) {
+        MONITOR.printf("IGN Val Changed to  %s\r\n",aceconvalues_current.ign?"HIGH":"LOW");
+        if(aceconvalues_current.ign) {
+            lv_obj_add_state(ui_SwitchIGN, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_SwitchIGN, LV_STATE_CHECKED);
+        }
+    }
+    
     //================================================== Read ACEDATA =========================================*/
     if(s.available()) {
+        MONITOR.printf("ACEDATA Available");
         String str = s.readStringUntil('\n');
         MONITOR.printf("ECHO: %s\n",str.c_str());
         String cmd = str;
@@ -880,9 +936,10 @@ void acecon_dev_tick(HardwareSerial& s) {
             acecon_parse_k9door(cmd);
             acecon_parse_serialnumber(cmd);
 
+            ui_update_acedata();
         }
     }
-
+    
 }
 
 void setup() {
@@ -892,8 +949,11 @@ void setup() {
     display_init();
     input_init();
     ui_init();
+    lv_obj_add_event_cb(ui_SwitchPPT, ui_switch_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_SwitchPPS, ui_switch_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_SwitchALM, ui_switch_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_SwitchHPS, ui_switch_handler, LV_EVENT_ALL, NULL);
     dimmer.max_level(.0625);
-    
     //================================================== XBEE Setup =========================================*/
 #ifndef CUSTOM
     XBEE.begin(115200, SERIAL_8N1, 18, 17);
@@ -922,12 +982,13 @@ void setup() {
     pinMode(ACECON_IGN_IN,INPUT);
     pinMode(ACECON_POP_IN,INPUT);
 
-    pinMode(ACECON_PPS_OUT,OUTPUT);
+    pinMode(ACECON_PPS_OUT,OUTPUT); 
     pinMode(ACECON_PPT_OUT,OUTPUT);
     pinMode(ACECON_HPS_OUT,OUTPUT);
     pinMode(ACECON_ALM_OUT,OUTPUT);
-       
-    ACECONSerial.begin(115200,SERIAL_8N1,ACEDATA_TX,ACEDATA_RX);
+   
+
+    ACECONSerial.begin(4800,SERIAL_8N1,ACEDATA_TX,ACEDATA_RX);
         
 }
 
@@ -936,9 +997,9 @@ void loop() {
 
     display_update();
     lv_timer_handler();
-        
+
     monitor_dev_tick(MONITOR);
-    
+
     xbee_dev_tick(&my_xbee);
     if(((int)last.status)<0) {
         on_xbee_error(last.cmd, last.status);

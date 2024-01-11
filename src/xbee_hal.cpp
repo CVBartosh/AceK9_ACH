@@ -127,12 +127,12 @@ int xbee_ser_write( xbee_serial_t *serial, const void FAR *buffer,int length)
 
 int xbee_ser_read( xbee_serial_t *serial, void FAR *buffer, int bufsize)
 {
-    for(int i = 0;i<1000;++i) {
-        if(((HardwareSerial*)serial->ser)->available()>=bufsize) {
-            break;
-        }
-        delay(1);
-    }
+    // for(int i = 0;i<1000;++i) {
+    //     if(((HardwareSerial*)serial->ser)->available()>=bufsize) {
+    //         break;
+    //     }
+    //     delay(1);
+    // }
     int avail = min(bufsize,((HardwareSerial*)serial->ser)->available());
     int result = (int)((HardwareSerial*)serial->ser)->read((char*)buffer,avail);
     return result;

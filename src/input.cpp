@@ -8,6 +8,7 @@ arduino::ft6206<TOUCH_WIDTH,TOUCH_HEIGHT> touch(Wire);
 void lvgl_touch_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
     uint16_t x;
     uint16_t y;
+    
     if(touch.update() && touch.xy(&x,&y)) {
         data->state = LV_INDEV_STATE_PR;
         data->point.x = x;
