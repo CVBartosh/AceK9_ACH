@@ -44,6 +44,98 @@ extern lv_obj_t * ui_LabelRightTemp;
 extern lv_obj_t * ui_LabelTempAvg;
 void ui_event_ImgButton6(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton6;
+// SCREEN: ui_MenuScreen1
+void ui_MenuScreen1_screen_init(void);
+extern lv_obj_t * ui_MenuScreen1;
+void ui_event_ImgButton2(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton2;
+void ui_event_ImgButton3(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton3;
+void ui_event_ImgButton4(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton4;
+extern lv_obj_t * ui_LabelAlarmPower;
+extern lv_obj_t * ui_DropdownAlarmPower;
+extern lv_obj_t * ui_CheckboxAutoSnooze;
+extern lv_obj_t * ui_LabelDoorPower;
+extern lv_obj_t * ui_DropdownDoorPower;
+extern lv_obj_t * ui_CheckboxStallMonitor;
+extern lv_obj_t * ui_LabelBattVoltSet;
+extern lv_obj_t * ui_LabelBattVoltSetValue;
+extern lv_obj_t * ui_ImgButtonBattVoltSetDown;
+extern lv_obj_t * ui_ImgButtonBattVoltSetUp;
+void ui_event_ImgButton16(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton16;
+extern lv_obj_t * ui_CheckboxAuxIn;
+// SCREEN: ui_MenuScreen2
+void ui_MenuScreen2_screen_init(void);
+extern lv_obj_t * ui_MenuScreen2;
+void ui_event_ImgButton5(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton5;
+void ui_event_ImgButton8(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton8;
+void ui_event_ImgButton12(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton12;
+extern lv_obj_t * ui_LabelAlarmHotSet;
+extern lv_obj_t * ui_LabelAlarmHotSetValue;
+extern lv_obj_t * ui_ImgButtonHotSetDown;
+extern lv_obj_t * ui_ImgButtonHotSetUp;
+extern lv_obj_t * ui_LabelAlarmColdSet;
+extern lv_obj_t * ui_LabelAlarmColdSetValue;
+extern lv_obj_t * ui_ImgButtonColdSetDown;
+extern lv_obj_t * ui_ImgButtonColdSetUp;
+extern lv_obj_t * ui_CheckboxTemperatureAveraging;
+extern lv_obj_t * ui_DropdownAlarmPower2;
+extern lv_obj_t * ui_LabelTempUnits;
+void ui_event_ImgButton13(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton13;
+// SCREEN: ui_MenuScreen3
+void ui_MenuScreen3_screen_init(void);
+extern lv_obj_t * ui_MenuScreen3;
+void ui_event_ImgButton20(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton20;
+void ui_event_ImgButton21(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton21;
+void ui_event_ImgButton22(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton22;
+extern lv_obj_t * ui_LabelIntelaBoxSN;
+extern lv_obj_t * ui_LabelIntelaBoxSNValue;
+extern lv_obj_t * ui_LabelControlHeadSN;
+extern lv_obj_t * ui_LabelControlHeadSNValue;
+void ui_event_ImgButton23(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton23;
+extern lv_obj_t * ui_Button2;
+extern lv_obj_t * ui_LabelControlHeadSNValue1;
+// SCREEN: ui_MenuScreen4
+void ui_MenuScreen4_screen_init(void);
+extern lv_obj_t * ui_MenuScreen4;
+void ui_event_ImgButton15(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton15;
+void ui_event_ImgButton17(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton17;
+void ui_event_ImgButton18(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton18;
+void ui_event_ImgButton19(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton19;
+extern lv_obj_t * ui_ButtonAutoTest;
+extern lv_obj_t * ui_Label2;
+// SCREEN: ui_MenuScreen5
+void ui_MenuScreen5_screen_init(void);
+extern lv_obj_t * ui_MenuScreen5;
+void ui_event_ImgButton24(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton24;
+void ui_event_ImgButton25(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton25;
+void ui_event_ImgButton26(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton26;
+extern lv_obj_t * ui_LabelLog1;
+void ui_event_ImgButton27(lv_event_t * e);
+extern lv_obj_t * ui_ImgButton27;
+extern lv_obj_t * ui_LabelLog2;
+extern lv_obj_t * ui_LabelLog3;
+extern lv_obj_t * ui_LabelLog4;
+extern lv_obj_t * ui_LabelLog5;
+extern lv_obj_t * ui_LabelLog6;
+extern lv_obj_t * ui_LabelLog7;
 // SCREEN: ui_ACECONScreen
 void ui_ACECONScreen_screen_init(void);
 extern lv_obj_t * ui_ACECONScreen;
@@ -117,6 +209,7 @@ LV_IMG_DECLARE(ui_img_arrowiconblank_png);    // assets\ArrowIconBlank.png
 LV_IMG_DECLARE(ui_img_batteryenabledicon_png);    // assets\BatteryEnabledIcon.png
 LV_IMG_DECLARE(ui_img_batterydisabledicon_png);    // assets\BatteryDisabledIcon.png
 LV_IMG_DECLARE(ui_img_cardoorenabledicon_png);    // assets\CarDoorEnabledIcon.png
+LV_IMG_DECLARE(ui_img_cardooropenicon_png);    // assets\CarDoorOpenIcon.png
 LV_IMG_DECLARE(ui_img_cardoordisabledicon_png);    // assets\CarDoorDisabledIcon.png
 LV_IMG_DECLARE(ui_img_keyenabledicon_png);    // assets\KeyEnabledIcon.png
 LV_IMG_DECLARE(ui_img_keyicon_png);    // assets\KeyIcon.png
@@ -127,6 +220,10 @@ LV_IMG_DECLARE(ui_img_wifidisabledicon_png);    // assets\WiFiDisabledIcon.png
 LV_IMG_DECLARE(ui_img_greentempcircle_png);    // assets\GreenTempCircle.png
 LV_IMG_DECLARE(ui_img_redtempcircle_png);    // assets\RedTempCircle.png
 LV_IMG_DECLARE(ui_img_arrowrighticon_png);    // assets\ArrowRightIcon.png
+LV_IMG_DECLARE(ui_img_arrowdownicon_png);    // assets\ArrowDownIcon.png
+LV_IMG_DECLARE(ui_img_arrowdowniconsmall_png);    // assets\ArrowDownIconSmall.png
+LV_IMG_DECLARE(ui_img_arrowupiconsmall_png);    // assets\ArrowUpIconSmall.png
+LV_IMG_DECLARE(ui_img_arrowupicon_png);    // assets\ArrowUpIcon.png
 
 
 
