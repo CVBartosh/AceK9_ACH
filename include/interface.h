@@ -76,6 +76,7 @@ struct data_packet
     uint32_t batteryVoltage;                    //  batteryVoltage | 4 bytes | 32-bit unsigned word | 
     char doorPopUTC[32];                        //  doorPopUTC | 32 bytes | string padded by zeros |
     uint32_t version;                           //  version | 4 bytes | 32-bit unsigned word | 
+    
 };
 
 struct status_packet

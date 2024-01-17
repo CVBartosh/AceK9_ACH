@@ -69,12 +69,14 @@ AuxValues auxvalues_current;
 AuxValues auxvalues_previous;
 
 //================================================== K9 Door Variables =========================================*/
-struct K9DoorValues{
-    bool k9DoorOpen;
+struct DoorValues{
+    bool DoorOpen;
+    bool DoorPopped;
+    bool DoorDisabled;
 };
 
-K9DoorValues k9doorvalues_current;
-K9DoorValues k9doorvalues_previous;
+DoorValues doorvalues_current;
+DoorValues doorvalues_previous;
 
 //================================================== VIM SN Variables =========================================*/
 String VIMSerialNumber;
@@ -118,6 +120,24 @@ struct acedata{
 
 acedata acedata_current;
 acedata acedata_previous;
+
+enum PowerOpt {p_CarONCarOFF,p_CarONManOFF,p_ManONManOFF,p_NoK9Left,p_OFF,p_AutoStart};
+enum Batt {b_10 = 1,b_105 = 2,b_11 = 3,b_115 =4,b_12 =5};
+
+struct SystemSetting{
+    bool TempAveragingEnabled;
+    bool AutoSnoozeEnabled;
+    bool StallMonitorEnabled;
+    bool AuxInputEnabled;
+    PowerOpt AlarmPower;
+    PowerOpt DoorPower;
+    Batt BatteryVoltage;
+
+};
+
+SystemSetting systemsetting_current;
+SystemSetting systemsetting_previous;
+SystemSetting systemsetting_default;
 
 //================================================== XBEE STUFF =========================================*/
     xbee_serial_t XBEE_SERPORT;
@@ -298,6 +318,57 @@ uint32_t crc32(uint32_t crc, unsigned char *buf, size_t len)
     return ~crc;
 }
 
+//================================================== ACECON Funcitons =========================================*/
+
+void set_HPS(bool value)
+{
+    aceconvalues_previous.hps = aceconvalues_current.hps;
+    aceconvalues_current.hps = value;
+    if (aceconvalues_current.hps){
+        lv_obj_add_state(ui_SwitchHPS, LV_STATE_CHECKED);
+    }else{
+        lv_obj_clear_state(ui_SwitchHPS, LV_STATE_CHECKED);
+    }
+    MONITOR.printf("HPS Val Changed to  %s\r\n",aceconvalues_current.hps?"HIGH":"LOW");
+    digitalWrite(ACECON_HPS_OUT,value);
+}
+
+void set_PPS(bool value)
+{
+    aceconvalues_previous.pps = aceconvalues_current.pps;
+    aceconvalues_current.pps = value;
+    if (aceconvalues_current.pps){
+        lv_obj_add_state(ui_SwitchPPS, LV_STATE_CHECKED);
+    }else{
+        lv_obj_clear_state(ui_SwitchPPS, LV_STATE_CHECKED);
+    }
+    MONITOR.printf("PPS Val Changed to  %s\r\n",aceconvalues_current.pps?"HIGH":"LOW");
+    digitalWrite(ACECON_PPS_OUT,value);
+}
+
+void set_PPT(bool value)
+{    
+    if (aceconvalues_current.ppt){
+        lv_obj_add_state(ui_SwitchPPT, LV_STATE_CHECKED);
+    }else{
+        lv_obj_clear_state(ui_SwitchPPT, LV_STATE_CHECKED);
+    }
+    MONITOR.printf("PPT Val Changed to  %s\r\n",aceconvalues_current.ppt?"HIGH":"LOW");
+    digitalWrite(ACECON_PPT_OUT,value);
+}
+
+void set_ALM(bool value)
+{
+    aceconvalues_previous.alm = aceconvalues_current.alm;
+    aceconvalues_current.alm = value;
+    if (aceconvalues_current.alm){
+        lv_obj_add_state(ui_SwitchALM, LV_STATE_CHECKED);
+    }else{
+        lv_obj_clear_state(ui_SwitchALM, LV_STATE_CHECKED);
+    }
+    MONITOR.printf("ALM Val Changed to  %s\r\n",aceconvalues_current.alm?"HIGH":"LOW");
+    digitalWrite(ACECON_ALM_OUT,value);
+}
 
 //================================================== Callback Funcitons =========================================*/
 
@@ -661,15 +732,61 @@ void monitor_dev_tick(HardwareSerial& s) {
 byte ASCII2Num(char asciival){
 	return byte(asciival) - 48;
 }
-void ui_update_acedata() {
-    if(acedata_previous.leftTemp!=acedata_current.leftTemp) {
+
+void ui_update_acecon() {
+
+    if( tempvalues_previous.leftTemp!=tempvalues_current.leftTemp) {
         static char szLeftTemp[6];
-        sprintf(szLeftTemp,"%3.1f",acedata_current.leftTemp);
+        sprintf(szLeftTemp,"%3.1f",tempvalues_current.leftTemp);
         lv_label_set_text_static(ui_LabelTemp1Val,szLeftTemp);
     }
+    if (tempvalues_previous.rightTemp!=tempvalues_current.rightTemp) {
+        static char szRightTemp[6];
+        sprintf(szRightTemp,"%3.1f",tempvalues_current.rightTemp);
+        lv_label_set_text_static(ui_LabelTemp2Val,szRightTemp);
+    }
+
+    if (systemsetting_current.TempAveragingEnabled ==true){
+        static char szAvgTemp[6];
+        sprintf(szAvgTemp,"%3.1f",tempvalues_current.avgTemp);
+        lv_label_set_text_static(ui_LabelTempAvg,szAvgTemp);
+    }else{
+        lv_label_set_text_static(ui_LabelTempAvg,"");
+    }
+
+    if (aceconvalues_current.ign) {
+            lv_obj_clear_state(ui_ImgButtonKey, LV_STATE_PRESSED);            
+        } else {
+            lv_obj_add_state(ui_ImgButtonKey, LV_STATE_PRESSED);
+        }
+
+    if (battvalues_current.error == true){
+        lv_obj_add_state(ui_ImgButtonBattery, LV_STATE_DISABLED);
+    }else{
+        lv_obj_clear_state(ui_ImgButtonBattery, LV_STATE_DISABLED);
+    }
+
+    if (enginevalues_current.engineStalled == true){
+        lv_obj_add_state(ui_ImgButtonEngine, LV_STATE_DISABLED);
+    }else{
+        lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_DISABLED);
+    }
+    
+    if (doorvalues_current.DoorDisabled == true){
+        lv_obj_add_state(ui_ImgButtonEngine, LV_STATE_DISABLED);
+        lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_PRESSED);
+    }else if  (doorvalues_current.DoorOpen == true){
+        lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_DISABLED);
+        lv_obj_add_state(ui_ImgButtonEngine, LV_STATE_PRESSED);
+    }else{
+        lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_DISABLED);
+        lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_PRESSED);
+    }
+
+       
 }
 
-void acecon_parse_temperature(String str){
+void acedata_parse_temperature(String str){
        
     tempvalues_previous = tempvalues_current;
     
@@ -769,7 +886,7 @@ void acecon_parse_temperature(String str){
     }
 }
 
-void acecon_parse_battery(String str){
+void acedata_parse_battery(String str){
        
     battvalues_previous = battvalues_current;
     
@@ -781,7 +898,7 @@ void acecon_parse_battery(String str){
     battvalues_current.voltage = acedata_current.batteryVoltage;
 
     // Check if the Batt Voltage is out of range
-	if (acedata_current.batteryVoltage < BatterySetting/10)
+	if (acedata_current.batteryVoltage < battvalues_current.voltage/10)
 		{
             BadBatteryCounter++;
             if (BadBatteryCounter > MaxBadBattValCounter)
@@ -797,7 +914,7 @@ void acecon_parse_battery(String str){
 
 }
 
-void acecon_parse_engine_stall(String str){
+void acedata_parse_engine_stall(String str){
 
     enginevalues_previous = enginevalues_current;
 
@@ -820,7 +937,7 @@ void acecon_parse_engine_stall(String str){
 
 }
 
-void acecon_parse_aux(String str){
+void acedata_parse_aux(String str){
     
     auxvalues_previous = auxvalues_current;
 
@@ -840,16 +957,16 @@ void acecon_parse_aux(String str){
 
 }
 
-void acecon_parse_k9door(String str){
+void acedata_parse_k9door(String str){
     
-    k9doorvalues_previous = k9doorvalues_current;
+    doorvalues_previous = doorvalues_current;
 
     if (str.charAt(ACEDATA_K9Door_POS)=='1'){
         acedata_current.K9DoorOpen = true;
     }else{
         acedata_current.K9DoorOpen = false;
     }
-    k9doorvalues_current.k9DoorOpen = acedata_current.K9DoorOpen;
+    doorvalues_current.DoorOpen = acedata_current.K9DoorOpen;
     
 
 }
@@ -863,21 +980,24 @@ static void ui_switch_handler(lv_event_t * e)
         bool checked = lv_obj_has_state(obj,LV_STATE_CHECKED);
         if(obj==ui_SwitchPPT) {
             MONITOR.printf("PPT Switch %s\r\n",checked?"on":"off");
-            digitalWrite(ACECON_PPT_OUT, checked?HIGH:LOW);
+            if (aceconvalues_previous.pps != aceconvalues_current.pps){
+                set_PPT(checked?HIGH:LOW);
+            }
+            
         } else if(obj==ui_SwitchPPS) {
             MONITOR.printf("PPS Switch %s\r\n",checked?"on":"off");
-            digitalWrite(ACECON_PPS_OUT, checked?HIGH:LOW);
+            set_PPS(checked?HIGH:LOW);
         } else if(obj==ui_SwitchALM) {
             MONITOR.printf("ALM Switch %s\r\n",checked?"on":"off");
-            digitalWrite(ACECON_ALM_OUT, checked?HIGH:LOW);
+            set_ALM(checked?HIGH:LOW);
         } else if(obj==ui_SwitchHPS) {
             MONITOR.printf("HPS Switch %s\r\n",checked?"on":"off");
-            digitalWrite(ACECON_HPS_OUT, checked?HIGH:LOW);
+            set_HPS(checked?HIGH:LOW);
         }
     }
 }
 
-void acecon_parse_serialnumber(String str){
+void acedata_parse_serialnumber(String str){
     int i;
     for (i =0; i<ACEDATA_VIM_SN_LENGTH;i++){
         VIMSerialNumber[i]=str.charAt(ACEDATA_VIM_SN_POS+i);
@@ -905,22 +1025,43 @@ void acecon_dev_tick(HardwareSerial& s) {
         MONITOR.printf("PPS Val Changed to  %s\r\n",aceconvalues_current.pps?"HIGH":"LOW");
         if(aceconvalues_current.pps) {
             lv_obj_add_state(ui_SwitchPPS, LV_STATE_CHECKED);
+            doorvalues_current.DoorDisabled = false;
         } else {
             lv_obj_clear_state(ui_SwitchPPS, LV_STATE_CHECKED);
+            doorvalues_current.DoorDisabled = true;
         }
     }
     if(aceconvalues_previous.ign != aceconvalues_current.ign) {
         MONITOR.printf("IGN Val Changed to  %s\r\n",aceconvalues_current.ign?"HIGH":"LOW");
         if(aceconvalues_current.ign) {
-            lv_obj_add_state(ui_SwitchIGN, LV_STATE_CHECKED);
+            lv_obj_add_state(ui_SwitchIGN, LV_STATE_CHECKED);        
         } else {
             lv_obj_clear_state(ui_SwitchIGN, LV_STATE_CHECKED);
         }
+        
     }
+    if(aceconvalues_previous.hps != aceconvalues_current.hps) {
+        
+        if(aceconvalues_current.hps) {
+            lv_obj_add_state(ui_SwitchHPS, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_SwitchHPS, LV_STATE_CHECKED);
+        }
+    }
+    if(aceconvalues_previous.alm != aceconvalues_current.alm) {
+        
+        if(aceconvalues_current.alm) {
+            lv_obj_add_state(ui_SwitchALM, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_SwitchALM, LV_STATE_CHECKED);
+        }
+    }
+    
+    
     
     //================================================== Read ACEDATA =========================================*/
     if(s.available()) {
-        MONITOR.printf("ACEDATA Available");
+        MONITOR.printf("ACEDATA Available\n");
         String str = s.readStringUntil('\n');
         MONITOR.printf("ECHO: %s\n",str.c_str());
         String cmd = str;
@@ -929,16 +1070,22 @@ void acecon_dev_tick(HardwareSerial& s) {
         int length=10;
         if(cmd.substring(index,length)=="$ACEK9,IH1") {
             acedata_previous = acedata_current;
-            acecon_parse_temperature(cmd);
-            acecon_parse_battery(cmd);
-            acecon_parse_engine_stall(cmd);
-            acecon_parse_aux(cmd);
-            acecon_parse_k9door(cmd);
-            acecon_parse_serialnumber(cmd);
+            acedata_parse_temperature(cmd);
+            acedata_parse_battery(cmd);
+            acedata_parse_engine_stall(cmd);
+            acedata_parse_aux(cmd);
+            acedata_parse_k9door(cmd);
+            acedata_parse_serialnumber(cmd);
 
-            ui_update_acedata();
+            ui_update_acecon();
         }
     }
+
+    // Redraw Screen
+    if(lv_scr_act() == ui_OperationScreen){
+        
+        lv_scr_load(lv_scr_act());
+    } 
     
 }
 
@@ -986,9 +1133,29 @@ void setup() {
     pinMode(ACECON_PPT_OUT,OUTPUT);
     pinMode(ACECON_HPS_OUT,OUTPUT);
     pinMode(ACECON_ALM_OUT,OUTPUT);
-   
 
+    digitalWrite(ACECON_PPT_OUT,LOW);
+    digitalWrite(ACECON_PPS_OUT,LOW);
+    digitalWrite(ACECON_ALM_OUT,LOW);
+    digitalWrite(ACECON_HPS_OUT,LOW);
+   
     ACECONSerial.begin(4800,SERIAL_8N1,ACEDATA_TX,ACEDATA_RX);
+
+    //================================================== Set System Defaults =========================================*/
+    systemsetting_default.AlarmPower = p_CarONCarOFF;
+    systemsetting_default.AutoSnoozeEnabled = false;
+    systemsetting_default.AuxInputEnabled = false;
+    systemsetting_default.BatteryVoltage = b_12;
+    systemsetting_default.DoorPower = p_CarONCarOFF;
+    systemsetting_default.StallMonitorEnabled = false;
+    systemsetting_default.TempAveragingEnabled = true;
+
+
+    set_HPS(HIGH);
+    set_PPS(HIGH);
+
+    
+   
         
 }
 
@@ -1006,8 +1173,7 @@ void loop() {
     }
 
     acecon_dev_tick(ACECONSerial);
-
-
+    
 
 }
 

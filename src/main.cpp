@@ -99,9 +99,10 @@ struct acecon {
     bool ppt;
     bool pps;
     bool ign;
+    bool ValueChanged;
 };
-acecon aceconvalues_current = {false,false,false,false,false};
-acecon aceconvalues_previous = {false,false,false,false,false};
+acecon aceconvalues_current = {false,false,false,false,false,false};
+acecon aceconvalues_previous = {false,false,false,false,false,false};
 
 struct acedata{
     TempSign leftTempSign;
@@ -116,6 +117,7 @@ struct acedata{
     bool Aux2Input;
     bool K9DoorOpen;
     char VIMSerialNumber[17];
+    bool ValueChanged;
 };
 
 acedata acedata_current;
@@ -497,15 +499,15 @@ void on_monitor_connect(const char* str) {
     last.cmd = COMMAND_ID::CONNECT;
     connect_packet data;
     memset(&data,0,sizeof(data));
-    strcpy(data.host,"3.20.178.49");
-    strcpy(data.lastWillMessage,"Disconnected");
+    strcpy(data.host,"acek9server.com");
+    strcpy(data.lastWillMessage,"disconnected");
     strcpy(data.lastWillTopic,"unit/wj00002/connection");
     strcpy(data.username,"wj00002");
     strcpy(data.password,"0Aa9YyKccy4DBDK8");
-    strcpy(data.unitname,"WJ00002");
+    strcpy(data.unitname,"wj00002");
     data.cleanSession = ACE_TRUE;
-    data.lastWillQos = 2;
-    data.port = 1883;
+    data.lastWillQos = 1;
+    data.port =8883;
     data.lastWillRetain = ACE_TRUE;
     uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
     
@@ -631,7 +633,7 @@ void on_monitor_status(const char* str) {
     strcpy(data.unitID, "V550B01100#12344");
     strcpy(data.unitname, "VP01234");
     strcpy(data.ctrlHeadSerialNumber, "09B");
-    strcpy(data.unitFirmwareVersion, "C502E4061G10165");
+    strcpy(data.unitFirmwareVersion, "C502E4061G-10165");
     strcpy(data.modemModel, "SARA-R410M-02B");
     strcpy(data.modemFirmwareVersion, "L0.0.00.00.05.08");
     strcpy(data.carrierCode, "A1");
@@ -722,9 +724,16 @@ void monitor_dev_tick(HardwareSerial& s) {
         } else if(cmd=="status") {
             on_monitor_status(str.c_str());
         } else if(cmd=="log") {
-            on_monitor_log(str.c_str());
+            on_monitor_log(str.c_str());  
         } else if(cmd=="connection") {
             on_monitor_connection(str.c_str());
+        } else if(cmd.substring(0,9)=="lefttemp "){
+            MONITOR.printf("Left Temp Changed\n");
+            acedata_current.leftTemp = cmd.substring(9).toFloat();
+            static char szLeftTemp[6];
+            sprintf(szLeftTemp,"%3.1f",tempvalues_current.leftTemp);
+            MONITOR.printf(szLeftTemp);
+            acedata_current.ValueChanged = true;
         }
     }
 }
@@ -736,6 +745,7 @@ byte ASCII2Num(char asciival){
 void ui_update_acecon() {
 
     if( tempvalues_previous.leftTemp!=tempvalues_current.leftTemp) {
+        MONITOR.printf("Left Temp Changed\n");
         static char szLeftTemp[6];
         sprintf(szLeftTemp,"%3.1f",tempvalues_current.leftTemp);
         lv_label_set_text_static(ui_LabelTemp1Val,szLeftTemp);
@@ -983,7 +993,6 @@ static void ui_switch_handler(lv_event_t * e)
             if (aceconvalues_previous.pps != aceconvalues_current.pps){
                 set_PPT(checked?HIGH:LOW);
             }
-            
         } else if(obj==ui_SwitchPPS) {
             MONITOR.printf("PPS Switch %s\r\n",checked?"on":"off");
             set_PPS(checked?HIGH:LOW);
@@ -1034,11 +1043,11 @@ void acecon_dev_tick(HardwareSerial& s) {
     if(aceconvalues_previous.ign != aceconvalues_current.ign) {
         MONITOR.printf("IGN Val Changed to  %s\r\n",aceconvalues_current.ign?"HIGH":"LOW");
         if(aceconvalues_current.ign) {
-            lv_obj_add_state(ui_SwitchIGN, LV_STATE_CHECKED);        
+            lv_obj_add_state(ui_SwitchIGN, LV_STATE_CHECKED);
         } else {
             lv_obj_clear_state(ui_SwitchIGN, LV_STATE_CHECKED);
         }
-        
+        aceconvalues_current.ValueChanged = true;
     }
     if(aceconvalues_previous.hps != aceconvalues_current.hps) {
         
@@ -1056,8 +1065,8 @@ void acecon_dev_tick(HardwareSerial& s) {
             lv_obj_clear_state(ui_SwitchALM, LV_STATE_CHECKED);
         }
     }
-    
-    
+
+
     
     //================================================== Read ACEDATA =========================================*/
     if(s.available()) {
@@ -1077,16 +1086,22 @@ void acecon_dev_tick(HardwareSerial& s) {
             acedata_parse_k9door(cmd);
             acedata_parse_serialnumber(cmd);
 
-            ui_update_acecon();
         }
     }
+      
 
     // Redraw Screen
-    if(lv_scr_act() == ui_OperationScreen){
+    if(lv_scr_act() == ui_OperationScreen && (acedata_current.ValueChanged) || (aceconvalues_current.ValueChanged)){
+
+
+        acedata_current.ValueChanged = false;
+        aceconvalues_current.ValueChanged = false;
         
+        ui_update_acecon();
+
         lv_scr_load(lv_scr_act());
     } 
-    
+
 }
 
 void setup() {
@@ -1150,13 +1165,11 @@ void setup() {
     systemsetting_default.StallMonitorEnabled = false;
     systemsetting_default.TempAveragingEnabled = true;
 
+    acedata_current.ValueChanged = false;
 
     set_HPS(HIGH);
     set_PPS(HIGH);
 
-    
-   
-        
 }
 
 
@@ -1173,7 +1186,7 @@ void loop() {
     }
 
     acecon_dev_tick(ACECONSerial);
-    
+
 
 }
 
