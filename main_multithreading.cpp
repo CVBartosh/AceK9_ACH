@@ -15,7 +15,8 @@
 #include "xbee/atcmd.h"
 #include "xbee/tx_status.h"
 #include "xbee/user_data.h"
-
+#include "acedata_serial_task.hpp"
+#include "test.h"
 //================================================== Temperature Variables =========================================
 enum TempSign {ts_None,ts_Neg = 45,ts_Pos_IBox = 32, ts_Pos_VIM = 43,ts_Error = 69, ts_Opn = 53, ts_Sho = 52};// Pos = "+" or " ", Neg = "-", Error = "E", Open = "5", Sho = "4"
 enum TempState {tst_OK,tst_Warning,tst_Over, tst_OverPlus,tst_Under};
@@ -33,7 +34,7 @@ struct TempValues{
 
 TempValues tempvalues_current;
 TempValues tempvalues_previous;
-
+static bool last_received = false;
 //================================================== Battery Variables =========================================*/
 enum BatteryThreshold {B_100=100,B_105=105,B_110=110,B_115=115,B_120=120};
 BatteryThreshold BatterySetting = BatteryThreshold::B_100;
@@ -99,9 +100,10 @@ struct acecon {
     bool ppt;
     bool pps;
     bool ign;
+    bool ValueChanged;
 };
-acecon aceconvalues_current = {false,false,false,false,false};
-acecon aceconvalues_previous = {false,false,false,false,false};
+acecon aceconvalues_current = {false,false,false,false,false,false};
+acecon aceconvalues_previous = {false,false,false,false,false,false};
 
 struct acedata{
     TempSign leftTempSign;
@@ -116,6 +118,7 @@ struct acedata{
     bool Aux2Input;
     bool K9DoorOpen;
     char VIMSerialNumber[17];
+    bool ValueChanged;
 };
 
 acedata acedata_current;
@@ -213,18 +216,18 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
             MONITOR.println("Acknowledge Packet Received");
             acknowledge_packet pck;
             memcpy(&pck,payload+1,payload_length-1);
-            
             last.cmd = pck.cmd_ID;
             last.status = pck.status;
+            last_received = true;
         }
         break;
         case COMMAND_ID::COMMAND: {
             MONITOR.println("Command Packet Received");
             command_packet pck;
             memcpy(&pck,payload+1,payload_length-1);
-            
             last.cmd = pck.cmd_ID;
             command_data = pck;
+            last_received = true;
         }
         break;
         case COMMAND_ID::CONFIG: {
@@ -234,9 +237,10 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
             
             last.cmd = pck.cmd_ID;
             config_data = pck;
-        }
-        break;
+            last_received = true;
             
+        }
+        break; 
     }
 
     // If all characters of message are printable, just print it as a string
@@ -370,6 +374,22 @@ void set_ALM(bool value)
     digitalWrite(ACECON_ALM_OUT,value);
 }
 
+// void enable_ACEDATA_RX(){
+//     ACECONSerial.end(true); // maybe?
+//     pinMode(ACEDATA_TX,OUTPUT_OPEN_DRAIN);
+//     ACECONSerial.begin(4800,SERIAL_8N1,ACEDATA_RX,-1);
+    
+// }
+
+// void enable_ACEDATA_TX(){
+//     ACECONSerial.end(true);
+
+//     pinMode(ACEDATA_TX, OUTPUT);
+//     digitalWrite(ACEDATA_TX,LOW);
+    
+//     ACECONSerial.begin(4800,SERIAL_8N1,-1,ACEDATA_TX,true);
+// }
+
 //================================================== Callback Funcitons =========================================*/
 
 static bool at_cmd_recv = false;
@@ -497,15 +517,15 @@ void on_monitor_connect(const char* str) {
     last.cmd = COMMAND_ID::CONNECT;
     connect_packet data;
     memset(&data,0,sizeof(data));
-    strcpy(data.host,"3.20.178.49");
-    strcpy(data.lastWillMessage,"Disconnected");
+    strcpy(data.host,"acek9server.com");
+    strcpy(data.lastWillMessage,"disconnected");
     strcpy(data.lastWillTopic,"unit/wj00002/connection");
     strcpy(data.username,"wj00002");
     strcpy(data.password,"0Aa9YyKccy4DBDK8");
-    strcpy(data.unitname,"WJ00002");
+    strcpy(data.unitname,"wj00002");
     data.cleanSession = ACE_TRUE;
-    data.lastWillQos = 2;
-    data.port = 1883;
+    data.lastWillQos = 1;
+    data.port =8883;
     data.lastWillRetain = ACE_TRUE;
     uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
     
@@ -631,7 +651,7 @@ void on_monitor_status(const char* str) {
     strcpy(data.unitID, "V550B01100#12344");
     strcpy(data.unitname, "VP01234");
     strcpy(data.ctrlHeadSerialNumber, "09B");
-    strcpy(data.unitFirmwareVersion, "C502E4061G10165");
+    strcpy(data.unitFirmwareVersion, /*C502E4061G-10165*/"C502E4061G10165");
     strcpy(data.modemModel, "SARA-R410M-02B");
     strcpy(data.modemFirmwareVersion, "L0.0.00.00.05.08");
     strcpy(data.carrierCode, "A1");
@@ -704,6 +724,78 @@ void on_monitor_log(const char* str) {
     
 }
 
+void on_monitor_config(const char* str) {
+    
+    last.cmd = COMMAND_ID::CONFIG;
+
+    config_packet data;
+    memset(&data, 0, sizeof(data));
+    strcpy(data.TopicName, "config");
+    data.qos = 1;
+    data.retainFlag = ACE_FALSE;
+        
+    uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
+    
+    uint8_t* payload = (uint8_t*)malloc(sizeof(data)+5);
+    if(payload==nullptr) {
+        MONITOR.println("Out of memory");
+        while(1);
+    }
+    payload[0]=(uint8_t)last.cmd;
+    memcpy(payload+1,&crc,sizeof(uint32_t));
+    memcpy(payload+5,&data,sizeof(data));
+        
+    status = sendUserDataRelayAPIFrame(&my_xbee,(const char*)payload, sizeof(data)+5); 
+    free(payload);
+
+    if (status < 0) 
+    {
+        MONITOR.printf("Error %d sending config packet\n", status);
+    }
+    else 
+    {
+        
+    }
+
+    
+}
+
+void on_monitor_command(const char* str) {
+    
+    last.cmd = COMMAND_ID::COMMAND;
+
+    command_packet data;
+    memset(&data, 0, sizeof(data));
+    strcpy(data.TopicName, "command");
+    data.qos = 1;
+    data.retainFlag = ACE_FALSE;
+        
+    uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
+    
+    uint8_t* payload = (uint8_t*)malloc(sizeof(data)+5);
+    if(payload==nullptr) {
+        MONITOR.println("Out of memory");
+        while(1);
+    }
+    payload[0]=(uint8_t)last.cmd;
+    memcpy(payload+1,&crc,sizeof(uint32_t));
+    memcpy(payload+5,&data,sizeof(data));
+        
+    status = sendUserDataRelayAPIFrame(&my_xbee,(const char*)payload, sizeof(data)+5); 
+    free(payload);
+
+    if (status < 0) 
+    {
+        MONITOR.printf("Error %d sending config packet\n", status);
+    }
+    else 
+    {
+        
+    }
+
+    
+}
+
 void monitor_dev_tick(HardwareSerial& s) {
     if(s.available()) {
         String str = s.readString();
@@ -722,9 +814,20 @@ void monitor_dev_tick(HardwareSerial& s) {
         } else if(cmd=="status") {
             on_monitor_status(str.c_str());
         } else if(cmd=="log") {
-            on_monitor_log(str.c_str());
+            on_monitor_log(str.c_str());  
         } else if(cmd=="connection") {
             on_monitor_connection(str.c_str());
+        } else if (cmd=="config"){
+            on_monitor_config(str.c_str());
+        } else if (cmd=="command"){
+            on_monitor_command(str.c_str());
+        } else if(cmd.substring(0,9)=="lefttemp "){
+            MONITOR.printf("Left Temp Changed\n");
+            acedata_current.leftTemp = cmd.substring(9).toFloat();
+            static char szLeftTemp[6];
+            sprintf(szLeftTemp,"%3.1f",tempvalues_current.leftTemp);
+            MONITOR.printf(szLeftTemp);
+            acedata_current.ValueChanged = true;
         }
     }
 }
@@ -736,6 +839,7 @@ byte ASCII2Num(char asciival){
 void ui_update_acecon() {
 
     if( tempvalues_previous.leftTemp!=tempvalues_current.leftTemp) {
+        MONITOR.printf("Left Temp Changed\n");
         static char szLeftTemp[6];
         sprintf(szLeftTemp,"%3.1f",tempvalues_current.leftTemp);
         lv_label_set_text_static(ui_LabelTemp1Val,szLeftTemp);
@@ -983,7 +1087,6 @@ static void ui_switch_handler(lv_event_t * e)
             if (aceconvalues_previous.pps != aceconvalues_current.pps){
                 set_PPT(checked?HIGH:LOW);
             }
-            
         } else if(obj==ui_SwitchPPS) {
             MONITOR.printf("PPS Switch %s\r\n",checked?"on":"off");
             set_PPS(checked?HIGH:LOW);
@@ -1005,7 +1108,6 @@ void acedata_parse_serialnumber(String str){
     VIMSerialNumber[i]=0;
 
 }
-
 void acecon_dev_tick(HardwareSerial& s) {
     
     //================================================== Read ACECON Inputs =========================================*/
@@ -1034,11 +1136,11 @@ void acecon_dev_tick(HardwareSerial& s) {
     if(aceconvalues_previous.ign != aceconvalues_current.ign) {
         MONITOR.printf("IGN Val Changed to  %s\r\n",aceconvalues_current.ign?"HIGH":"LOW");
         if(aceconvalues_current.ign) {
-            lv_obj_add_state(ui_SwitchIGN, LV_STATE_CHECKED);        
+            lv_obj_add_state(ui_SwitchIGN, LV_STATE_CHECKED);
         } else {
             lv_obj_clear_state(ui_SwitchIGN, LV_STATE_CHECKED);
         }
-        
+        aceconvalues_current.ValueChanged = true;
     }
     if(aceconvalues_previous.hps != aceconvalues_current.hps) {
         
@@ -1056,13 +1158,20 @@ void acecon_dev_tick(HardwareSerial& s) {
             lv_obj_clear_state(ui_SwitchALM, LV_STATE_CHECKED);
         }
     }
-    
-    
+
+
     
     //================================================== Read ACEDATA =========================================*/
-    if(s.available()) {
+    static uint8_t tmp[8192];
+    if(acedata_serial_available()!=0) {
         MONITOR.printf("ACEDATA Available\n");
-        String str = s.readStringUntil('\n');
+        int nIndex;
+        acedata_serial_read(tmp,sizeof(tmp));
+        for(nIndex = 0;nIndex<sizeof(tmp) && tmp[nIndex]!='\n';++nIndex) {
+            //
+        }
+        tmp[nIndex]=0;
+        String str((char*)tmp);
         MONITOR.printf("ECHO: %s\n",str.c_str());
         String cmd = str;
         cmd.trim();
@@ -1077,16 +1186,42 @@ void acecon_dev_tick(HardwareSerial& s) {
             acedata_parse_k9door(cmd);
             acedata_parse_serialnumber(cmd);
 
-            ui_update_acecon();
         }
+
+        if(cmd.substring(index,length)=="$ACEK9,IP1"){
+
+            MONITOR.printf("Sending TX String\n");
+            //enable_ACEDATA_TX();
+
+            // pinMode(ACEDATA_TX,OUTPUT);
+            // for(int i=0;i<4;i++){
+            //     digitalWrite(ACEDATA_TX,HIGH);
+            //     delay(100);
+            //     digitalWrite(ACEDATA_TX,LOW);
+            //     delay(100);
+            // }
+            acedata_serial_send("$ACEK9,CH1A,C502E5A63G-DEV0103B2C502E5A63GDADA00\r\n");
+            //ACECONSerial.printf("$ACEK9,CH1A,C502E5A63G-DEV0103B2C502E5A63GDADA00\r\n");
+            //ACECONSerial.flush(true);
+
+            //enable_ACEDATA_RX();
+        } 
+
     }
+      
 
     // Redraw Screen
-    if(lv_scr_act() == ui_OperationScreen){
+    if(lv_scr_act() == ui_OperationScreen && ((acedata_current.ValueChanged) || (aceconvalues_current.ValueChanged))){
+
+
+        acedata_current.ValueChanged = false;
+        aceconvalues_current.ValueChanged = false;
         
+        ui_update_acecon();
+
         lv_scr_load(lv_scr_act());
     } 
-    
+
 }
 
 void setup() {
@@ -1096,6 +1231,7 @@ void setup() {
     display_init();
     input_init();
     ui_init();
+    //flood_it();
     lv_obj_add_event_cb(ui_SwitchPPT, ui_switch_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_SwitchPPS, ui_switch_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_SwitchALM, ui_switch_handler, LV_EVENT_ALL, NULL);
@@ -1139,8 +1275,8 @@ void setup() {
     digitalWrite(ACECON_ALM_OUT,LOW);
     digitalWrite(ACECON_HPS_OUT,LOW);
    
-    ACECONSerial.begin(4800,SERIAL_8N1,ACEDATA_TX,ACEDATA_RX);
-
+    //enable_ACEDATA_RX();
+    acedata_serial_init(ACECONSerial);
     //================================================== Set System Defaults =========================================*/
     systemsetting_default.AlarmPower = p_CarONCarOFF;
     systemsetting_default.AutoSnoozeEnabled = false;
@@ -1150,14 +1286,13 @@ void setup() {
     systemsetting_default.StallMonitorEnabled = false;
     systemsetting_default.TempAveragingEnabled = true;
 
+    acedata_current.ValueChanged = false;
 
     set_HPS(HIGH);
     set_PPS(HIGH);
 
-    
-   
-        
 }
+
 
 
 void loop() {
@@ -1173,7 +1308,6 @@ void loop() {
     }
 
     acecon_dev_tick(ACECONSerial);
-    
 
 }
 

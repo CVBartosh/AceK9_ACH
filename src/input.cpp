@@ -2,7 +2,7 @@
 #include <Wire.h>
 #include <lvgl.h>
 #include <input.hpp>
-
+#ifdef TOUCH_WIDTH
 arduino::ft6206<TOUCH_WIDTH,TOUCH_HEIGHT> touch(Wire);
 
 void lvgl_touch_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
@@ -29,3 +29,7 @@ extern "C" void input_init() {
     lv_indev_drv_register(&indev_drv);
 
 }
+#else
+extern "C" void input_init() {
+}
+#endif

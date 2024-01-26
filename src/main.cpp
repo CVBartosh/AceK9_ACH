@@ -2,6 +2,7 @@
 #define MONITOR Serial
 #define ACECONSerial Serial2
 #include <Arduino.h>
+#include <Wire.h>
 #include <functional>
 #include <lvgl.h>
 #include <Squareline/ui.h>
@@ -188,6 +189,7 @@ SystemSetting systemsetting_default;
     #define ACEDATA_VIM_SN_POS 46
     #define ACEDATA_VIM_SN_LENGTH 16
 
+    String ACEDATA_Incoming_str = "";
 
 
 //================================================== XBee HAL Functions =========================================*/
@@ -213,9 +215,9 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
     int cmd = payload[0];
     switch((COMMAND_ID)cmd) {
         case COMMAND_ID::ACKNOWLEDGE: {
-            MONITOR.println("Acknowledge Packet Received");
             acknowledge_packet pck;
             memcpy(&pck,payload+1,payload_length-1);
+            MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
             last.cmd = pck.cmd_ID;
             last.status = pck.status;
             last_received = true;
@@ -466,7 +468,7 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
 }
 
 void on_xbee_error(COMMAND_ID id, STATUS_CODE code) {
-    MONITOR.printf("Error: Command (%d), Status (%d)\n",(int)id,(int)code);
+    MONITOR.printf("XBee Error: Command (%d), Status (%d)\n",(int)id,(int)code);
     last.status = (STATUS_CODE)0;
 }
 
@@ -1164,54 +1166,63 @@ void acecon_dev_tick(HardwareSerial& s) {
 
     
     //================================================== Read ACEDATA =========================================*/
-    static uint8_t spincount = 0; 
-    s.onReceive([](void){
-        if(ACECONSerial.available()) {
-            rxbuffer_size=ACECONSerial.readBytes(rxbuffer,sizeof(rxbuffer));
-        }
-    },false);
-    if(rxbuffer_size!=0) {
-        MONITOR.printf("ACEDATA Available\n");
-        int nIndex;
-        for(nIndex = 0;nIndex<sizeof(rxbuffer) && rxbuffer[nIndex]!='\n';++nIndex) {
-            //
-        }
-        rxbuffer[nIndex]=0;
-        String str((char*)rxbuffer);
-        MONITOR.printf("ECHO: %s\n",str.c_str());
-        String cmd = str;
-        cmd.trim();
-        int index=0;
-        int length=10;
-        if(cmd.substring(index,length)=="$ACEK9,IH1") {
-            acedata_previous = acedata_current;
-            acedata_parse_temperature(cmd);
-            acedata_parse_battery(cmd);
-            acedata_parse_engine_stall(cmd);
-            acedata_parse_aux(cmd);
-            acedata_parse_k9door(cmd);
-            acedata_parse_serialnumber(cmd);
+    if(s.available()) {
+        
+        MONITOR.printf("ACEDATA Available:%s\n",ACEDATA_Incoming_str.c_str());
+        if (ACEDATA_Incoming_str == "")
+        {
+            MONITOR.printf("New Transmission\n");
+            s.readStringUntil('$');
+            ACEDATA_Incoming_str = "$";
+        }else{
+
+            ACEDATA_Incoming_str += s.readString();
+             MONITOR.printf("Building String:%s\n",ACEDATA_Incoming_str.c_str());
 
         }
+        
+        if (ACEDATA_Incoming_str.substring(ACEDATA_Incoming_str.length()-1,1) == "\n"){
 
-        if(cmd.substring(index,length)=="$ACEK9,IP1"){
+            MONITOR.printf("Received: %s\n",ACEDATA_Incoming_str.c_str());
+            String cmd = ACEDATA_Incoming_str;
+            ACEDATA_Incoming_str = "";
+            cmd.trim();
+            int index=0;
+            int length=10;
+            if(cmd.substring(index,length)=="$ACEK9,IH1") {
+                acedata_previous = acedata_current;
+                acedata_parse_temperature(cmd);
+                acedata_parse_battery(cmd);
+                acedata_parse_engine_stall(cmd);
+                acedata_parse_aux(cmd);
+                acedata_parse_k9door(cmd);
+                acedata_parse_serialnumber(cmd);
 
-            MONITOR.printf("Sending TX String\n");
-            enable_ACEDATA_TX();
+            }
 
-            // pinMode(ACEDATA_TX,OUTPUT);
-            // for(int i=0;i<4;i++){
-            //     digitalWrite(ACEDATA_TX,HIGH);
-            //     delay(100);
-            //     digitalWrite(ACEDATA_TX,LOW);
-            //     delay(100);
-            // }
-            
-            ACECONSerial.printf("$ACEK9,CH1A,C502E5A63G-DEV0103B2C502E5A63GDADA00\r\n");
-            ACECONSerial.flush(true);
+            if(cmd.substring(index,length)=="$ACEK9,IP1"){
 
-            enable_ACEDATA_RX();
-        } 
+                MONITOR.printf("Sending TX String\n");
+                enable_ACEDATA_TX();
+
+                // pinMode(ACEDATA_TX,OUTPUT);
+                // for(int i=0;i<4;i++){
+                //     digitalWrite(ACEDATA_TX,HIGH);
+                //     delay(100);
+                //     digitalWrite(ACEDATA_TX,LOW);
+                //     delay(100);
+                // }
+                
+                ACECONSerial.printf("$ACEK9,CH1A,C502E5A63G-DEV0103B2C502E5A63GDADA00\r\n");
+                ACECONSerial.flush(true);
+
+                enable_ACEDATA_RX();
+            } 
+
+
+        }
+        
+        
 
     }
       
@@ -1296,6 +1307,11 @@ void setup() {
 
     set_HPS(HIGH);
     set_PPS(HIGH);
+
+    while(!ACECONSerial.available()){};
+    ACECONSerial.flush();
+    
+    MONITOR.printf("Exiting Setup()\n");
 
 }
 
