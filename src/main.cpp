@@ -213,10 +213,11 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
     }
     const uint8_t* payload = data->payload;
     int cmd = payload[0];
+    
     switch((COMMAND_ID)cmd) {
         case COMMAND_ID::ACKNOWLEDGE: {
             acknowledge_packet pck;
-            memcpy(&pck,payload+1,payload_length-1);
+            memcpy(&pck,payload+5,payload_length-5);
             MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
             last.cmd = pck.cmd_ID;
             last.status = pck.status;
@@ -226,7 +227,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         case COMMAND_ID::COMMAND: {
             MONITOR.println("Command Packet Received");
             command_packet pck;
-            memcpy(&pck,payload+1,payload_length-1);
+            memcpy(&pck,payload+5,payload_length-5);
             last.cmd = pck.cmd_ID;
             command_data = pck;
             last_received = true;
@@ -235,7 +236,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         case COMMAND_ID::CONFIG: {
             MONITOR.println("Config Packet Received");
             config_packet pck;
-            memcpy(&pck,payload+1,payload_length-1);
+            memcpy(&pck,payload+5,payload_length-5);
             
             last.cmd = pck.cmd_ID;
             config_data = pck;
@@ -1108,7 +1109,7 @@ void process_vim(const char* incoming, void* state) {
     while(i>-1) {
         String line = trickle.substring(0,i+1);
         trickle = trickle.substring(i+1);
-        MONITOR.printf("Received: %s\n",line.c_str());
+        //MONITOR.printf("Received: %s\n",line.c_str());
             String cmd = line;
             cmd.trim();
             int index=0;
@@ -1126,7 +1127,7 @@ void process_vim(const char* incoming, void* state) {
 
             if(cmd.substring(index,length)=="$ACEK9,IP1"){
 
-                MONITOR.printf("Sending TX String\n");
+                //MONITOR.printf("Sending TX String\n");
                 
                 // pinMode(ACEDATA_TX,OUTPUT);
                 // for(int i=0;i<4;i++){
@@ -1297,7 +1298,7 @@ void loop() {
 
     display_update();
     lv_timer_handler();
-    return;
+    
     monitor_dev_tick(MONITOR);
 
     xbee_dev_tick(&my_xbee);
@@ -1305,7 +1306,7 @@ void loop() {
         on_xbee_error(last.cmd, last.status);
     }
 
-    acecon_dev_tick();
+    //acecon_dev_tick();
 
 }
 
