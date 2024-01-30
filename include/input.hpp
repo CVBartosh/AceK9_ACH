@@ -1,6 +1,6 @@
 #pragma once
-#ifdef TOUCH_WIDTH
 #include <touch_config.h>
+#ifdef TOUCH_WIDTH
 #include <ft6206.hpp>
 
 

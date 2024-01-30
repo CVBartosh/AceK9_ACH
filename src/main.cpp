@@ -18,6 +18,7 @@
 #include "xbee/tx_status.h"
 #include "xbee/user_data.h"
 #include "test.h"
+#include "vim_controller.hpp"
 //================================================== Temperature Variables =========================================
 enum TempSign {ts_None,ts_Neg = 45,ts_Pos_IBox = 32, ts_Pos_VIM = 43,ts_Error = 69, ts_Opn = 53, ts_Sho = 52};// Pos = "+" or " ", Neg = "-", Error = "E", Open = "5", Sho = "4"
 enum TempState {tst_OK,tst_Warning,tst_Over, tst_OverPlus,tst_Under};
@@ -80,8 +81,9 @@ struct DoorValues{
 DoorValues doorvalues_current;
 DoorValues doorvalues_previous;
 
-//================================================== VIM SN Variables =========================================*/
+//================================================== VIM Variables =========================================*/
 String VIMSerialNumber;
+
 
 //================================================== GLOBAL VARIABLES =========================================*/
 
@@ -188,8 +190,6 @@ SystemSetting systemsetting_default;
 
     #define ACEDATA_VIM_SN_POS 46
     #define ACEDATA_VIM_SN_LENGTH 16
-
-    String ACEDATA_Incoming_str = "";
 
 
 //================================================== XBee HAL Functions =========================================*/
@@ -376,21 +376,6 @@ void set_ALM(bool value)
     digitalWrite(ACECON_ALM_OUT,value);
 }
 
-void enable_ACEDATA_RX(){
-    ACECONSerial.end(true); // maybe?
-    pinMode(ACEDATA_TX,OUTPUT_OPEN_DRAIN);
-    ACECONSerial.begin(4800,SERIAL_8N1,ACEDATA_RX,-1);
-    
-}
-
-void enable_ACEDATA_TX(){
-    ACECONSerial.end(true);
-
-    pinMode(ACEDATA_TX, OUTPUT);
-    digitalWrite(ACEDATA_TX,LOW);
-    
-    ACECONSerial.begin(4800,SERIAL_8N1,-1,ACEDATA_TX,true);
-}
 
 //================================================== Callback Funcitons =========================================*/
 
@@ -1110,9 +1095,60 @@ void acedata_parse_serialnumber(String str){
     VIMSerialNumber[i]=0;
 
 }
-static uint8_t rxbuffer[8192];
-static size_t rxbuffer_size = 0;
-void acecon_dev_tick(HardwareSerial& s) {
+void process_vim(const char* incoming, void* state) {
+    static String trickle;
+    vim_data data = vim_load();
+    if(*incoming) {
+        String s(incoming);
+        //MONITOR.printf("Incoming! %s\n",incoming);
+        trickle +=s;
+        
+    }
+    int i = trickle.indexOf("\n");
+    while(i>-1) {
+        String line = trickle.substring(0,i+1);
+        trickle = trickle.substring(i+1);
+        MONITOR.printf("Received: %s\n",line.c_str());
+            String cmd = line;
+            cmd.trim();
+            int index=0;
+            int length=10;
+            if(cmd.substring(index,length)=="$ACEK9,IH2") {
+                acedata_previous = acedata_current;
+                acedata_parse_temperature(cmd);
+                acedata_parse_battery(cmd);
+                acedata_parse_engine_stall(cmd);
+                acedata_parse_aux(cmd);
+                acedata_parse_k9door(cmd);
+                acedata_parse_serialnumber(cmd);
+
+            }
+
+            if(cmd.substring(index,length)=="$ACEK9,IP1"){
+
+                MONITOR.printf("Sending TX String\n");
+                
+                // pinMode(ACEDATA_TX,OUTPUT);
+                // for(int i=0;i<4;i++){
+                //     digitalWrite(ACEDATA_TX,HIGH);
+                //     delay(100);
+                //     digitalWrite(ACEDATA_TX,LOW);
+                //     delay(100);
+                // }
+                
+                vim_write_sz("$ACEK9,CH1A,C502E5A63G-DEV0103B2C502E5A63GDADA00\r\n");
+                
+
+                //enable_ACEDATA_RX();
+            } 
+
+            i = trickle.indexOf("\n");
+    }
+      
+
+    //vim_write_sz()
+}
+void acecon_dev_tick() {
     
     //================================================== Read ACECON Inputs =========================================*/
     aceconvalues_previous = aceconvalues_current;
@@ -1166,67 +1202,7 @@ void acecon_dev_tick(HardwareSerial& s) {
 
     
     //================================================== Read ACEDATA =========================================*/
-    if(s.available()) {
-        
-        MONITOR.printf("ACEDATA Available:%s\n",ACEDATA_Incoming_str.c_str());
-        if (ACEDATA_Incoming_str == "")
-        {
-            MONITOR.printf("New Transmission\n");
-            s.readStringUntil('$');
-            ACEDATA_Incoming_str = "$";
-        }else{
-
-            ACEDATA_Incoming_str += s.readString();
-             MONITOR.printf("Building String:%s\n",ACEDATA_Incoming_str.c_str());
-
-        }
-        
-        if (ACEDATA_Incoming_str.substring(ACEDATA_Incoming_str.length()-1,1) == "\n"){
-
-            MONITOR.printf("Received: %s\n",ACEDATA_Incoming_str.c_str());
-            String cmd = ACEDATA_Incoming_str;
-            ACEDATA_Incoming_str = "";
-            cmd.trim();
-            int index=0;
-            int length=10;
-            if(cmd.substring(index,length)=="$ACEK9,IH1") {
-                acedata_previous = acedata_current;
-                acedata_parse_temperature(cmd);
-                acedata_parse_battery(cmd);
-                acedata_parse_engine_stall(cmd);
-                acedata_parse_aux(cmd);
-                acedata_parse_k9door(cmd);
-                acedata_parse_serialnumber(cmd);
-
-            }
-
-            if(cmd.substring(index,length)=="$ACEK9,IP1"){
-
-                MONITOR.printf("Sending TX String\n");
-                enable_ACEDATA_TX();
-
-                // pinMode(ACEDATA_TX,OUTPUT);
-                // for(int i=0;i<4;i++){
-                //     digitalWrite(ACEDATA_TX,HIGH);
-                //     delay(100);
-                //     digitalWrite(ACEDATA_TX,LOW);
-                //     delay(100);
-                // }
-                
-                ACECONSerial.printf("$ACEK9,CH1A,C502E5A63G-DEV0103B2C502E5A63GDADA00\r\n");
-                ACECONSerial.flush(true);
-
-                enable_ACEDATA_RX();
-            } 
-
-
-        }
-        
-        
-
-    }
-      
-
+    
     // Redraw Screen
     if(lv_scr_act() == ui_OperationScreen && ((acedata_current.ValueChanged) || (aceconvalues_current.ValueChanged))){
 
@@ -1242,12 +1218,15 @@ void acecon_dev_tick(HardwareSerial& s) {
 }
 
 void setup() {
-     
-    Wire.begin( 18,8,100*1000);
+    
+   Wire.begin( 1,42,100*1000); 
     lv_init();
     display_init();
     input_init();
     ui_init();
+    vim_init(process_vim);
+    
+   //Wire.begin( 18,8,100*1000);
     //flood_it();
     lv_obj_add_event_cb(ui_SwitchPPT, ui_switch_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_SwitchPPS, ui_switch_handler, LV_EVENT_ALL, NULL);
@@ -1292,7 +1271,7 @@ void setup() {
     digitalWrite(ACECON_ALM_OUT,LOW);
     digitalWrite(ACECON_HPS_OUT,LOW);
    
-    enable_ACEDATA_RX();
+    //enable_ACEDATA_RX();
 
     //================================================== Set System Defaults =========================================*/
     systemsetting_default.AlarmPower = p_CarONCarOFF;
@@ -1308,9 +1287,6 @@ void setup() {
     set_HPS(HIGH);
     set_PPS(HIGH);
 
-    while(!ACECONSerial.available()){};
-    ACECONSerial.flush();
-    
     MONITOR.printf("Exiting Setup()\n");
 
 }
@@ -1321,7 +1297,7 @@ void loop() {
 
     display_update();
     lv_timer_handler();
-
+    return;
     monitor_dev_tick(MONITOR);
 
     xbee_dev_tick(&my_xbee);
@@ -1329,7 +1305,7 @@ void loop() {
         on_xbee_error(last.cmd, last.status);
     }
 
-    acecon_dev_tick(ACECONSerial);
+    acecon_dev_tick();
 
 }
 

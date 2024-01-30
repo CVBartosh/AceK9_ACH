@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <lvgl.h>
 #include <input.hpp>
+
 #ifdef TOUCH_WIDTH
 arduino::ft6206<TOUCH_WIDTH,TOUCH_HEIGHT> touch(Wire);
 
