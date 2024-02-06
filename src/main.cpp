@@ -7,6 +7,7 @@
 #include <lvgl.h>
 #include <Squareline/ui.h>
 #include <interface.h>
+#include <init_csv.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,16 +21,21 @@
 #include "test.h"
 #include "vim_controller.hpp"
 //================================================== Temperature Variables =========================================
-enum TempSign {ts_None,ts_Neg = 45,ts_Pos_IBox = 32, ts_Pos_VIM = 43,ts_Error = 69, ts_Opn = 53, ts_Sho = 52};// Pos = "+" or " ", Neg = "-", Error = "E", Open = "5", Sho = "4"
+#define TempErrorGeneral    'E'
+#define TempErrorOpen       '5'
+#define TempErrorSho        '4'
+#define TempSignPos         ' '
+#define TempSignNeg         '-'
+
 enum TempState {tst_OK,tst_Warning,tst_Over, tst_OverPlus,tst_Under};
 struct TempValues{
     float leftTemp;
     bool leftTempError;
-    TempSign leftTempSign;
+    char leftTempSign;
     TempState leftTempState;
     float rightTemp;
     bool rightTempError;
-    TempSign rightTempSign;
+    char rightTempSign;
     TempState rightTempState;
     float avgTemp;
 };
@@ -109,9 +115,9 @@ acecon aceconvalues_current = {false,false,false,false,false,false};
 acecon aceconvalues_previous = {false,false,false,false,false,false};
 
 struct acedata{
-    TempSign leftTempSign;
+    char leftTempSign;
     float leftTemp;
-    TempSign rightTempSign;
+    char rightTempSign;
     float rightTemp;
     float batteryVoltage;
     bool engineStallSensorPresent;
@@ -377,6 +383,19 @@ void set_ALM(bool value)
     digitalWrite(ACECON_ALM_OUT,value);
 }
 
+void send_init_packet() {
+    size_t len = strlen(OUTPUT_CSV);
+    uint32_t crc = crc32(0,(unsigned char*)OUTPUT_CSV,len);
+    uint8_t* p = (uint8_t*)malloc(5+len);
+    if(p==nullptr) {
+        return;
+    }
+    *p=255;
+    memcpy(p+1,&crc,4);
+    memcpy(p+5,OUTPUT_CSV,len);
+    sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
+    free(p);
+}
 
 //================================================== Callback Funcitons =========================================*/
 
@@ -545,7 +564,7 @@ void on_monitor_data(const char* str) {
     last.cmd = COMMAND_ID::DATA;
     data_packet data;
     memset(&data, 0, sizeof(data));
-    strcpy(data.TopicName, "data");
+    strcpy(data.topicName, "data");
     data.qos = 1;
     data.retainFlag = ACE_FALSE;
     strcpy(data.timeStampUTC, "2020-09-11T08:02:17:350Z");
@@ -595,7 +614,7 @@ void on_monitor_connection(const char* str) {
 
     connection_packet data;
     memset(&data, 0, sizeof(data));
-    strcpy(data.TopicName, "connection");
+    strcpy(data.topicName, "connection");
     data.qos = 1;
     data.retainFlag = ACE_TRUE;
     strcpy(data.status, "Online");
@@ -632,7 +651,7 @@ void on_monitor_status(const char* str) {
 
     status_packet data;
     memset(&data, 0, sizeof(data));
-    strcpy(data.TopicName, "status");
+    strcpy(data.topicName, "status");
     data.qos = 1;
     data.retainFlag = ACE_FALSE;
 
@@ -679,7 +698,7 @@ void on_monitor_log(const char* str) {
 
     log_packet data;
     memset(&data, 0, sizeof(data));
-    strcpy(data.TopicName, "logs");
+    strcpy(data.topicName, "logs");
     data.qos = 1;
     data.retainFlag = ACE_FALSE;
     strcpy(data.timeStampUTC, "2023-10-24T08:02:17.350Z");
@@ -718,7 +737,7 @@ void on_monitor_config(const char* str) {
 
     config_packet data;
     memset(&data, 0, sizeof(data));
-    strcpy(data.TopicName, "config");
+    strcpy(data.topicName, "config");
     data.qos = 1;
     data.retainFlag = ACE_FALSE;
         
@@ -754,7 +773,7 @@ void on_monitor_command(const char* str) {
 
     command_packet data;
     memset(&data, 0, sizeof(data));
-    strcpy(data.TopicName, "command");
+    strcpy(data.topicName, "command");
     data.qos = 1;
     data.retainFlag = ACE_FALSE;
         
@@ -809,13 +828,8 @@ void monitor_dev_tick(HardwareSerial& s) {
             on_monitor_config(str.c_str());
         } else if (cmd=="command"){
             on_monitor_command(str.c_str());
-        } else if(cmd.substring(0,9)=="lefttemp "){
-            MONITOR.printf("Left Temp Changed\n");
-            acedata_current.leftTemp = cmd.substring(9).toFloat();
-            static char szLeftTemp[6];
-            sprintf(szLeftTemp,"%3.1f",tempvalues_current.leftTemp);
-            MONITOR.printf(szLeftTemp);
-            acedata_current.ValueChanged = true;
+        } else if(cmd.substring(0,9)=="xbee init"){
+            send_init_packet();
         }
     }
 }
@@ -883,99 +897,100 @@ void acedata_parse_temperature(String str){
     tempvalues_previous = tempvalues_current;
     
     //================================================== Left Temp =========================================*/
-    acedata_current.leftTempSign = (TempSign)(str.charAt(ACEDATA_Temp1_Sign_POS));
+    //MONITOR.printf("Left Temp Sign: %c\n",str.charAt(ACEDATA_Temp1_Sign_POS));
+    acedata_current.leftTempSign = (str.charAt(ACEDATA_Temp1_Sign_POS));
     
     // Check for Error First
-    if (acedata_current.leftTempSign == static_cast<int>(TempSign::ts_Error)){
+    if (acedata_current.leftTempSign == TempErrorGeneral){
+                
+        if (str.charAt(ACEDATA_Temp1_10X_POS) == TempErrorOpen || str.charAt(ACEDATA_Temp1_10X_POS) == TempErrorSho){
+            acedata_current.leftTempSign = str.charAt(ACEDATA_Temp1_10X_POS);
+        }
         
-        if (str.charAt(ACEDATA_Temp1_10X_POS) == static_cast<byte>(TempSign::ts_Opn)){
-            acedata_current.leftTempSign = TempSign::ts_Opn;
-        }
-        else if (str.charAt(ACEDATA_Temp1_10X_POS) == static_cast<byte>(TempSign::ts_Sho)){
-            acedata_current.leftTempSign = TempSign::ts_Sho;
-        }
-
         tempvalues_current.leftTempError = true;
         tempvalues_current.leftTempSign = acedata_current.leftTempSign;
 
     }
     else 
     {
+        
         // Parse Temperature Magnitude	
-        acedata_current.leftTemp = static_cast<float>(ASCII2Num(str.charAt(ACEDATA_Temp1_1000X_POS)) * 1000 +
-                                                        ASCII2Num(str.charAt(ACEDATA_Temp1_100X_POS)) * 100 +
-                                                        ASCII2Num(str.charAt(ACEDATA_Temp1_10X_POS)) * 10 +
-                                                        ASCII2Num(str.charAt(ACEDATA_Temp1_1X_POS)))  / 10;
-
-        if(acedata_current.leftTempSign == (TempSign::ts_Neg)){
-            acedata_current.leftTempSign = TempSign::ts_Neg;
+        String ia =str.substring(ACEDATA_Temp1_1000X_POS,ACEDATA_Temp1_1X_POS+1);
+       
+        acedata_current.leftTemp = ((float)atoi(ia.c_str()))/10.0f;
+        
+        if(acedata_current.leftTempSign == TempSignNeg){
             acedata_current.leftTemp = acedata_current.leftTemp * -1;
-
-            tempvalues_current.leftTemp = acedata_current.leftTemp;
         }
-        else{
-            acedata_current.leftTempSign = TempSign::ts_Pos_IBox;
-        } 
+
+        tempvalues_current.leftTemp = acedata_current.leftTemp;
 
         tempvalues_current.leftTempError = false;
 
     }
 
+    // MONITOR.print("Left Temp Value: ");
+    // MONITOR.println(tempvalues_current.leftTemp);
 
     //================================================== Right Temp =========================================*/
-    acedata_current.rightTempSign = (TempSign)(str.charAt(ACEDATA_Temp2_Sign_POS));
+    //MONITOR.printf("Right Temp Sign: %c\n",str.charAt(ACEDATA_Temp2_Sign_POS));
+    acedata_current.rightTempSign = (str.charAt(ACEDATA_Temp2_Sign_POS));
     
     // Check for Error First
-    if (acedata_current.rightTempSign == static_cast<int>(TempSign::ts_Error)){
+    if (acedata_current.rightTempSign == TempErrorGeneral){
+                
+        if (str.charAt(ACEDATA_Temp2_10X_POS) == TempErrorOpen || str.charAt(ACEDATA_Temp2_10X_POS) == TempErrorSho){
+            acedata_current.rightTempSign = str.charAt(ACEDATA_Temp2_10X_POS);
+        }
         
-        if (str.charAt(ACEDATA_Temp2_10X_POS) == static_cast<byte>(TempSign::ts_Opn)){
-            acedata_current.rightTempSign = TempSign::ts_Opn;
-        }
-        else if (str.charAt(ACEDATA_Temp2_10X_POS) == static_cast<byte>(TempSign::ts_Sho)){
-            acedata_current.rightTempSign = TempSign::ts_Sho;
-        }
-
         tempvalues_current.rightTempError = true;
         tempvalues_current.rightTempSign = acedata_current.rightTempSign;
 
     }
-    else{
+    else 
+    {
+        
         // Parse Temperature Magnitude	
-        acedata_current.rightTemp = static_cast<float>(ASCII2Num(str.charAt(ACEDATA_Temp2_1000X_POS)) * 1000 +
-                                                        ASCII2Num(str.charAt(ACEDATA_Temp2_100X_POS)) * 100 +
-                                                        ASCII2Num(str.charAt(ACEDATA_Temp2_10X_POS)) * 10 +
-                                                        ASCII2Num(str.charAt(ACEDATA_Temp2_1X_POS)))  / 10;
-
-        if(acedata_current.rightTempSign == (TempSign::ts_Neg)){
-            acedata_current.rightTempSign = TempSign::ts_Neg;
+        String ia =str.substring(ACEDATA_Temp2_1000X_POS,ACEDATA_Temp2_1X_POS+1);
+       
+        acedata_current.rightTemp = ((float)atoi(ia.c_str()))/10.0f;
+        
+        if(acedata_current.rightTempSign == TempSignNeg){
             acedata_current.rightTemp = acedata_current.rightTemp * -1;
-
-            tempvalues_current.rightTemp = acedata_current.rightTemp;
         }
-        else{
-            acedata_current.rightTempSign = TempSign::ts_Pos_IBox;
-        } 
+
+        tempvalues_current.rightTemp = acedata_current.rightTemp;
 
         tempvalues_current.rightTempError = false;
 
     }
 
+    //MONITOR.print("Right Temp Value: ");
+    //MONITOR.println(tempvalues_current.rightTemp);
+
+    //================================================== Average Temp =========================================*/
+
     // If Both Sensors have not returned an error
     if (tempvalues_current.leftTempError == false && tempvalues_current.rightTempError == false){
-        tempvalues_current.avgTemp = (tempvalues_current.leftTempError + tempvalues_current.rightTempError)/2;
+        
+        tempvalues_current.avgTemp = (tempvalues_current.leftTemp + tempvalues_current.rightTemp)/2;
     }
     else
     {
         // If a single sensor is failed, used the working sensor value as the average
         if (tempvalues_current.leftTempError == true && tempvalues_current.rightTempError == false)
         {
-            tempvalues_current.avgTemp = tempvalues_current.leftTempError;
+            tempvalues_current.avgTemp = tempvalues_current.rightTemp;
         }
         else if (tempvalues_current.leftTempError == false && tempvalues_current.rightTempError == true)
         {
-            tempvalues_current.avgTemp = tempvalues_current.rightTempError;
+            tempvalues_current.avgTemp = tempvalues_current.leftTemp;
         }
     }
+
+    //MONITOR.print("Average Temp Value: ");
+    //MONITOR.println(tempvalues_current.avgTemp);
+
 }
 
 void acedata_parse_battery(String str){
@@ -1096,6 +1111,7 @@ void acedata_parse_serialnumber(String str){
     VIMSerialNumber[i]=0;
 
 }
+
 void process_vim(const char* incoming, void* state) {
     static String trickle;
     vim_data data = vim_load();
@@ -1105,50 +1121,61 @@ void process_vim(const char* incoming, void* state) {
         trickle +=s;
         
     }
-    int i = trickle.indexOf("\n");
-    while(i>-1) {
-        String line = trickle.substring(0,i+1);
-        trickle = trickle.substring(i+1);
-        //MONITOR.printf("Received: %s\n",line.c_str());
-            String cmd = line;
-            cmd.trim();
+    int newlineIndex = trickle.indexOf("\n");
+    int dollarsignIndex = trickle.indexOf("$");
+
+    //MONITOR.printf("Received trickle: %s\n",trickle.c_str());
+
+    while(newlineIndex > -1) {
+
+        if (dollarsignIndex == -1){
+            
+            trickle = trickle.substring(newlineIndex+1);
+            //MONITOR.printf("No Dollar Sign: Reset trickle: %s\n",trickle.c_str());
+        }else{
+            String line = trickle.substring(dollarsignIndex,newlineIndex+1);
+            line.trim();
+            //MONITOR.printf("Parsed line: %s\n",line.c_str());
+
+            trickle = trickle.substring(newlineIndex+1);
+            //MONITOR.printf("Reset trickle: %s\n",trickle.c_str());
+                    
             int index=0;
             int length=10;
-            if(cmd.substring(index,length)=="$ACEK9,IH2") {
+
+            if(line.substring(index,length)=="$ACEK9,IH1") {
+                //MONITOR.printf("Parsed line: %s\n",line.c_str());
                 acedata_previous = acedata_current;
-                acedata_parse_temperature(cmd);
-                acedata_parse_battery(cmd);
-                acedata_parse_engine_stall(cmd);
-                acedata_parse_aux(cmd);
-                acedata_parse_k9door(cmd);
-                acedata_parse_serialnumber(cmd);
+                acedata_parse_temperature(line);
+                acedata_parse_battery(line);
+                acedata_parse_engine_stall(line);
+                acedata_parse_aux(line);
+                acedata_parse_k9door(line);
+                acedata_parse_serialnumber(line);
 
             }
 
-            if(cmd.substring(index,length)=="$ACEK9,IP1"){
+            if(line.substring(index,length)=="$ACEK9,IH2") {
+                //MONITOR.printf("Parsed line: %s\n",line.c_str());
+                
+            }
 
-                //MONITOR.printf("Sending TX String\n");
-                
-                // pinMode(ACEDATA_TX,OUTPUT);
-                // for(int i=0;i<4;i++){
-                //     digitalWrite(ACEDATA_TX,HIGH);
-                //     delay(100);
-                //     digitalWrite(ACEDATA_TX,LOW);
-                //     delay(100);
-                // }
-                
+            if(line.substring(index,length)=="$ACEK9,IP1"){
+                //MONITOR.printf("Parsed line: %s\n",line.c_str());
                 vim_write_sz("$ACEK9,CH1A,C502E5A63G-DEV0103B2C502E5A63GDADA00\r\n");
-                
 
-                //enable_ACEDATA_RX();
             } 
 
-            i = trickle.indexOf("\n");
+            newlineIndex = trickle.indexOf("\n");
+        
+        }
+    
     }
       
 
     //vim_write_sz()
 }
+
 void acecon_dev_tick() {
     
     //================================================== Read ACECON Inputs =========================================*/
@@ -1288,6 +1315,7 @@ void setup() {
     set_HPS(HIGH);
     set_PPS(HIGH);
 
+    
     MONITOR.printf("Exiting Setup()\n");
 
 }
@@ -1306,7 +1334,7 @@ void loop() {
         on_xbee_error(last.cmd, last.status);
     }
 
-    //acecon_dev_tick();
+    acecon_dev_tick();
 
 }
 
