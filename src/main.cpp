@@ -7,7 +7,6 @@
 #include <lvgl.h>
 #include <Squareline/ui.h>
 #include <interface.h>
-#include <init_csv.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +19,9 @@
 #include "xbee/user_data.h"
 #include "test.h"
 #include "vim_controller.hpp"
+#include "SPIFFS.h"
+#include "init_csv.h"
+
 //================================================== Temperature Variables =========================================
 #define TempErrorGeneral    'E'
 #define TempErrorOpen       '5'
@@ -38,6 +40,7 @@ struct TempValues{
     char rightTempSign;
     TempState rightTempState;
     float avgTemp;
+    bool valueChanged;
 };
 
 TempValues tempvalues_current;
@@ -50,6 +53,7 @@ BatteryThreshold BatterySetting = BatteryThreshold::B_100;
 struct BatteryValues{
     float voltage;
     bool error;
+    bool valueChanged;
 };
 
 BatteryValues battvalues_current;
@@ -63,6 +67,8 @@ struct EngineValues{
     bool engineStalled;
     int engineStallCount;
     bool engineStallSensorPresent;
+    bool ignitionOn;
+    bool valueChanged;
 };
 
 EngineValues enginevalues_current;
@@ -72,6 +78,7 @@ EngineValues enginevalues_previous;
 struct AuxValues{
     bool aux1Active;
     bool aux2Active;
+    bool valueChanged;
 };
 
 AuxValues auxvalues_current;
@@ -79,9 +86,9 @@ AuxValues auxvalues_previous;
 
 //================================================== K9 Door Variables =========================================*/
 struct DoorValues{
-    bool DoorOpen;
-    bool DoorPopped;
-    bool DoorDisabled;
+    bool doorOpen;
+    bool doorPopped;
+    bool valueChanged;
 };
 
 DoorValues doorvalues_current;
@@ -109,7 +116,7 @@ struct acecon {
     bool ppt;
     bool pps;
     bool ign;
-    bool ValueChanged;
+    bool valueChanged;
 };
 acecon aceconvalues_current = {false,false,false,false,false,false};
 acecon aceconvalues_previous = {false,false,false,false,false,false};
@@ -136,25 +143,32 @@ acedata acedata_previous;
 enum PowerOpt {p_CarONCarOFF,p_CarONManOFF,p_ManONManOFF,p_NoK9Left,p_OFF,p_AutoStart};
 enum Batt {b_10 = 1,b_105 = 2,b_11 = 3,b_115 =4,b_12 =5};
 
-struct SystemSetting{
+struct SystemSettings{
     bool TempAveragingEnabled;
     bool AutoSnoozeEnabled;
     bool StallMonitorEnabled;
     bool AuxInputEnabled;
+    bool doorDisabled;
     PowerOpt AlarmPower;
     PowerOpt DoorPower;
     Batt BatteryVoltage;
 
 };
 
-SystemSetting systemsetting_current;
-SystemSetting systemsetting_previous;
-SystemSetting systemsetting_default;
+SystemSettings systemsettings_current;
+SystemSettings systemsettings_previous;
+SystemSettings systemsettings_default;
+
+#define EngineStallThreshold  5
 
 //================================================== XBEE STUFF =========================================*/
     xbee_serial_t XBEE_SERPORT;
     int status;
     xbee_dev_t my_xbee;
+    bool xbee_initialized = false;
+    bool xbee_cell_connected = false;
+    int xbee_signal_strength = 255;
+    bool xbee_reset = false;
 
 //================================================== ACECON GPIOs =========================================
     #define ACECON_PPS_IN 9
@@ -197,6 +211,32 @@ SystemSetting systemsetting_default;
     #define ACEDATA_VIM_SN_POS 46
     #define ACEDATA_VIM_SN_LENGTH 16
 
+
+void save_settings() {
+
+    SPIFFS.remove("/setttings");
+    File file = SPIFFS.open("/settings","wb",true);
+    file.write((uint8_t*)&systemsettings_current,sizeof(systemsettings_current));
+    file.close();
+}
+bool load_settings() {
+    memcpy(&systemsettings_current,&systemsettings_default,sizeof(systemsettings_current));
+    File file = SPIFFS.open("/settings","rb",false);
+    if(!file) {
+        return false;
+    }
+    if(file.size()<sizeof(systemsettings_current)) {
+        file.close();
+        return false;
+    }
+    if(sizeof(systemsettings_current)>file.read((uint8_t*)&systemsettings_current,sizeof(systemsettings_current))) {
+        memcpy(&systemsettings_current,&systemsettings_default,sizeof(systemsettings_current));
+        file.close();
+        return false;
+    }
+    file.close();
+    return true;
+}
 
 //================================================== XBee HAL Functions =========================================*/
 
@@ -384,15 +424,18 @@ void set_ALM(bool value)
 }
 
 void send_init_packet() {
-    size_t len = strlen(OUTPUT_CSV);
-    uint32_t crc = crc32(0,(unsigned char*)OUTPUT_CSV,len);
-    uint8_t* p = (uint8_t*)malloc(5+len);
-    if(p==nullptr) {
+    int len = strlen(INIT_CSV_CSV);
+    char* sz = (char*)malloc(6+len)+5;
+    strcpy(sz,INIT_CSV_CSV);
+    if(sz==(char*)5) {
+        MONITOR.println("Out of memory. Tough luck.");
         return;
     }
+    sz[len]=0;
+    uint32_t crc = crc32(0,(uint8_t*)sz,len);
+    uint8_t* p = (uint8_t*)(sz-5);
     *p=255;
     memcpy(p+1,&crc,4);
-    memcpy(p+5,OUTPUT_CSV,len);
     sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
     free(p);
 }
@@ -834,60 +877,133 @@ void monitor_dev_tick(HardwareSerial& s) {
     }
 }
 
-byte ASCII2Num(char asciival){
-	return byte(asciival) - 48;
-}
-
 void ui_update_acecon() {
 
-    if( tempvalues_previous.leftTemp!=tempvalues_current.leftTemp) {
-        MONITOR.printf("Left Temp Changed\n");
+    bool redrawFlag = false;
+
+    if (tempvalues_current.valueChanged){
+        //MONITOR.println("UI: Temp Values Need Updating");
+        redrawFlag = true;
+
+        if(tempvalues_previous.leftTemp!=tempvalues_current.leftTemp) {
+        //MONITOR.println("UI: Updating Left Temp");
         static char szLeftTemp[6];
         sprintf(szLeftTemp,"%3.1f",tempvalues_current.leftTemp);
         lv_label_set_text_static(ui_LabelTemp1Val,szLeftTemp);
-    }
-    if (tempvalues_previous.rightTemp!=tempvalues_current.rightTemp) {
-        static char szRightTemp[6];
-        sprintf(szRightTemp,"%3.1f",tempvalues_current.rightTemp);
-        lv_label_set_text_static(ui_LabelTemp2Val,szRightTemp);
-    }
-
-    if (systemsetting_current.TempAveragingEnabled ==true){
-        static char szAvgTemp[6];
-        sprintf(szAvgTemp,"%3.1f",tempvalues_current.avgTemp);
-        lv_label_set_text_static(ui_LabelTempAvg,szAvgTemp);
-    }else{
-        lv_label_set_text_static(ui_LabelTempAvg,"");
-    }
-
-    if (aceconvalues_current.ign) {
-            lv_obj_clear_state(ui_ImgButtonKey, LV_STATE_PRESSED);            
-        } else {
-            lv_obj_add_state(ui_ImgButtonKey, LV_STATE_PRESSED);
+        lv_label_set_text_static(ui_LabelLeftTemp,szLeftTemp);
         }
 
-    if (battvalues_current.error == true){
-        lv_obj_add_state(ui_ImgButtonBattery, LV_STATE_DISABLED);
-    }else{
-        lv_obj_clear_state(ui_ImgButtonBattery, LV_STATE_DISABLED);
+        if (tempvalues_previous.rightTemp!=tempvalues_current.rightTemp) {
+            //MONITOR.println("UI: Updating Right Temp");
+            static char szRightTemp[6];
+            sprintf(szRightTemp,"%3.1f",tempvalues_current.rightTemp);
+            lv_label_set_text_static(ui_LabelTemp2Val,szRightTemp);
+            lv_label_set_text_static(ui_LabelRightTemp,szRightTemp);
+        }
+
+        if (systemsettings_current.TempAveragingEnabled){
+            //MONITOR.println("UI: Updating Avg Temp");
+            static char szAvgTemp[6];
+            sprintf(szAvgTemp,"%3.1f",tempvalues_current.avgTemp);
+            lv_label_set_text_static(ui_LabelTempAvg,szAvgTemp);
+            }else{
+                lv_label_set_text_static(ui_LabelTempAvg,"Disabled");
+        }
+        
+        tempvalues_current.valueChanged = false;
     }
 
-    if (enginevalues_current.engineStalled == true){
-        lv_obj_add_state(ui_ImgButtonEngine, LV_STATE_DISABLED);
-    }else{
-        lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_DISABLED);
+
+    if (enginevalues_current.valueChanged){
+        //MONITOR.println("UI: Engine Values Need Updating");
+        redrawFlag = true;
+
+        //MONITOR.println("UI: Updating Ignition");
+        if (enginevalues_current.ignitionOn) {
+            //MONITOR.println("UI: Clearing Ignition State");
+            lv_obj_clear_state(ui_ImgButtonKey, LV_STATE_PRESSED); 
+                      
+        } else {
+            //MONITOR.println("UI: Adding Ignition State");
+            lv_obj_add_state(ui_ImgButtonKey, LV_STATE_PRESSED);
+
+                       
+        }
+
+        if(enginevalues_current.ignitionOn) {
+            lv_obj_add_state(ui_SwitchIGN, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_SwitchIGN, LV_STATE_CHECKED);
+        }
+
+        
+        if (enginevalues_current.engineStalled){
+            //MONITOR.println("UI: Adding Engine Stalled State");
+            lv_obj_add_state(ui_ImgButtonEngine, LV_STATE_PRESSED);
+        } else{
+            //MONITOR.println("UI: Clearing Engine Stalled State");
+            lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_PRESSED);
+        }
+
+
+        enginevalues_current.valueChanged = false;
     }
     
-    if (doorvalues_current.DoorDisabled == true){
-        lv_obj_add_state(ui_ImgButtonEngine, LV_STATE_DISABLED);
-        lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_PRESSED);
-    }else if  (doorvalues_current.DoorOpen == true){
-        lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_DISABLED);
-        lv_obj_add_state(ui_ImgButtonEngine, LV_STATE_PRESSED);
-    }else{
-        lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_DISABLED);
-        lv_obj_clear_state(ui_ImgButtonEngine, LV_STATE_PRESSED);
+
+    if (battvalues_current.valueChanged){
+        //MONITOR.println("UI: Temp Values Need Updating");
+        redrawFlag = true;
+
+        if (battvalues_current.error == true){
+            lv_obj_add_state(ui_ImgButtonBattery, LV_STATE_PRESSED);
+        }else{
+            lv_obj_clear_state(ui_ImgButtonBattery, LV_STATE_PRESSED);
+        }
+        
+        battvalues_current.valueChanged = false;
     }
+
+    if (doorvalues_current.valueChanged){
+
+        redrawFlag = true;
+
+        if (systemsettings_current.doorDisabled){
+            MONITOR.println("UI: Door Disabled");
+            lv_obj_add_flag(ui_ImgButtonDoorClosed,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonDoorOpen,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonDoorPopped,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(ui_ImgButtonDoorDisabled,LV_OBJ_FLAG_HIDDEN);
+        }else if  (doorvalues_current.doorPopped){
+            MONITOR.println("UI: Door Popped");
+            lv_obj_add_flag(ui_ImgButtonDoorClosed,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonDoorOpen,LV_OBJ_FLAG_HIDDEN);            
+            lv_obj_add_flag(ui_ImgButtonDoorDisabled,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(ui_ImgButtonDoorPopped,LV_OBJ_FLAG_HIDDEN);
+        }else if  (doorvalues_current.doorOpen){
+            MONITOR.println("UI: Door Opened");
+            lv_obj_add_flag(ui_ImgButtonDoorClosed,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonDoorPopped,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonDoorDisabled,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(ui_ImgButtonDoorOpen,LV_OBJ_FLAG_HIDDEN);           
+        }else{
+            MONITOR.println("UI: Door Closed");
+            lv_obj_add_flag(ui_ImgButtonDoorOpen,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonDoorPopped,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonDoorDisabled,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(ui_ImgButtonDoorClosed,LV_OBJ_FLAG_HIDDEN);
+        }
+
+        doorvalues_current.valueChanged = false;
+
+    }
+
+    // Redraw Screen
+    if(redrawFlag){
+        MONITOR.println("Redrawing Screen");
+
+        lv_scr_load(lv_scr_act());
+        redrawFlag = false;
+    } 
 
        
 }
@@ -991,33 +1107,45 @@ void acedata_parse_temperature(String str){
     //MONITOR.print("Average Temp Value: ");
     //MONITOR.println(tempvalues_current.avgTemp);
 
+    if (tempvalues_previous.leftTemp!=tempvalues_current.leftTemp || tempvalues_previous.rightTemp!=tempvalues_current.rightTemp){
+        tempvalues_current.valueChanged = true;
+    }
+
 }
 
 void acedata_parse_battery(String str){
        
     battvalues_previous = battvalues_current;
     
-    //================================================== Left Temp =========================================*/
-    acedata_current.batteryVoltage = static_cast<float>(ASCII2Num(str.charAt(ACEDATA_Batt_100X_POS)) * 100 +
-                                                        ASCII2Num(str.charAt(ACEDATA_Batt_10X_POS)) * 10 +
-                                                        ASCII2Num(str.charAt(ACEDATA_Batt_1X_POS))  ) / 10;
+    //================================================== Battery Value =========================================*/
+    	
+        String ia =str.substring(ACEDATA_Batt_100X_POS,ACEDATA_Batt_1X_POS+1);
+       
+        acedata_current.batteryVoltage = ((float)atoi(ia.c_str()))/10.0f;
     
     battvalues_current.voltage = acedata_current.batteryVoltage;
 
+    // MONITOR.print("Battery Voltage: ");
+    // MONITOR.println(battvalues_current.voltage);
+
     // Check if the Batt Voltage is out of range
 	if (acedata_current.batteryVoltage < battvalues_current.voltage/10)
-		{
-            BadBatteryCounter++;
-            if (BadBatteryCounter > MaxBadBattValCounter)
-            {
-                battvalues_current.error = true;
-            }
-		}
-		else
-		{
-            BadBatteryCounter = 0;
-			battvalues_current.error = false;
-		}
+    {
+        BadBatteryCounter++;
+        if (BadBatteryCounter > MaxBadBattValCounter)
+        {
+            battvalues_current.error = true;
+        }
+    }
+    else
+    {
+        BadBatteryCounter = 0;
+        battvalues_current.error = false;
+    }
+
+    if (battvalues_previous.error != battvalues_current.error){
+        battvalues_current.valueChanged = true;
+    }
 
 }
 
@@ -1026,21 +1154,45 @@ void acedata_parse_engine_stall(String str){
     enginevalues_previous = enginevalues_current;
 
     if (str.charAt(ACEDATA_Stall_Status_POS)=='0'){
+        //MONITOR.println("Engine Stalled");
         acedata_current.engineStalled = true;
     }else{
+        //MONITOR.println("Engine NOT Stalled");
         acedata_current.engineStalled = false;
     }
-    enginevalues_current.engineStalled = acedata_current.engineStalled;
 
-    acedata_current.EngineStallCount = static_cast<float>(ASCII2Num(str.charAt(ACEDATA_Stall_Count_10X_POS)) * 10 +
-                                                          ASCII2Num(str.charAt(ACEDATA_Stall_Count_1X_POS)));
-
+    String ia =str.substring(ACEDATA_Stall_Count_10X_POS,ACEDATA_Stall_Count_1X_POS+1);
+       
+        acedata_current.EngineStallCount = ((float)atoi(ia.c_str()))/10.0f;
+        enginevalues_current.engineStallCount = acedata_current.EngineStallCount;
     
+    //MONITOR.print("Engine Stall Count:");
+    //MONITOR.println(enginevalues_current.engineStallCount);
+
+
     if (str.charAt(ACEDATA_Stall_Sensor_Present_POS) =='A'){
+        //MONITOR.println("Engine Stall Sensor Present");
         acedata_current.engineStallSensorPresent = true;
     }else{
+        //MONITOR.println("Engine Stall Sensor Not Present");
         acedata_current.engineStallSensorPresent = false;
     }
+
+    enginevalues_current.engineStallSensorPresent = acedata_current.engineStallSensorPresent;
+
+    if (enginevalues_current.engineStallCount >= EngineStallThreshold){
+        //MONITOR.println("Stall Condition Achieved");
+        enginevalues_current.engineStalled = true;
+        
+    }else{
+        enginevalues_current.engineStalled = false;
+    }
+
+    if (enginevalues_previous.engineStalled != enginevalues_current.engineStalled){
+        //MONITOR.println("Engine Stalled Valued Changed ");
+        enginevalues_current.valueChanged = true;
+    }
+
 
 }
 
@@ -1069,12 +1221,19 @@ void acedata_parse_k9door(String str){
     doorvalues_previous = doorvalues_current;
 
     if (str.charAt(ACEDATA_K9Door_POS)=='1'){
+        //MONITOR.println("Door Open");
         acedata_current.K9DoorOpen = true;
     }else{
+        //MONITOR.println("Door Closed");
         acedata_current.K9DoorOpen = false;
     }
-    doorvalues_current.DoorOpen = acedata_current.K9DoorOpen;
+
+    doorvalues_current.doorOpen = acedata_current.K9DoorOpen;
     
+    if (doorvalues_previous.doorOpen != doorvalues_current.doorOpen){
+        //MONITOR.println("Door Value Changed");
+        doorvalues_current.valueChanged = true;
+    }
 
 }
 
@@ -1183,8 +1342,11 @@ void acecon_dev_tick() {
     aceconvalues_current.ppt = digitalRead(ACECON_POP_IN);
     aceconvalues_current.pps = digitalRead(ACECON_PPS_IN);
     aceconvalues_current.ign = digitalRead(ACECON_IGN_IN);
+
     if(aceconvalues_previous.ppt != aceconvalues_current.ppt) {
         MONITOR.printf("PPT Val Changed to  %s\r\n",aceconvalues_current.ppt?"HIGH":"LOW");
+        aceconvalues_current.valueChanged = true;
+
         if(aceconvalues_current.ppt) {
             lv_obj_add_state(ui_SwitchPPT, LV_STATE_CHECKED);
         } else {
@@ -1193,25 +1355,28 @@ void acecon_dev_tick() {
     }
     if(aceconvalues_previous.pps != aceconvalues_current.pps) {
         MONITOR.printf("PPS Val Changed to  %s\r\n",aceconvalues_current.pps?"HIGH":"LOW");
+        aceconvalues_current.valueChanged = true;
+
         if(aceconvalues_current.pps) {
             lv_obj_add_state(ui_SwitchPPS, LV_STATE_CHECKED);
-            doorvalues_current.DoorDisabled = false;
+            systemsettings_current.doorDisabled = false;
         } else {
             lv_obj_clear_state(ui_SwitchPPS, LV_STATE_CHECKED);
-            doorvalues_current.DoorDisabled = true;
+            systemsettings_current.doorDisabled = true;
         }
     }
     if(aceconvalues_previous.ign != aceconvalues_current.ign) {
-        MONITOR.printf("IGN Val Changed to  %s\r\n",aceconvalues_current.ign?"HIGH":"LOW");
-        if(aceconvalues_current.ign) {
-            lv_obj_add_state(ui_SwitchIGN, LV_STATE_CHECKED);
-        } else {
-            lv_obj_clear_state(ui_SwitchIGN, LV_STATE_CHECKED);
-        }
-        aceconvalues_current.ValueChanged = true;
+        enginevalues_previous.ignitionOn = enginevalues_current.ignitionOn;
+        enginevalues_current.ignitionOn = aceconvalues_current.ign;
+        MONITOR.printf("IGN Val Changed to  %s\r\n",enginevalues_current.ignitionOn?"HIGH":"LOW");
+        enginevalues_current.valueChanged = true; 
+        aceconvalues_current.valueChanged = true;
+       
     }
     if(aceconvalues_previous.hps != aceconvalues_current.hps) {
-        
+        MONITOR.printf("HPS Val Changed to  %s\r\n",aceconvalues_current.hps?"HIGH":"LOW");
+        aceconvalues_current.valueChanged = true;
+
         if(aceconvalues_current.hps) {
             lv_obj_add_state(ui_SwitchHPS, LV_STATE_CHECKED);
         } else {
@@ -1219,7 +1384,9 @@ void acecon_dev_tick() {
         }
     }
     if(aceconvalues_previous.alm != aceconvalues_current.alm) {
-        
+        MONITOR.printf("ALM Val Changed to  %s\r\n",aceconvalues_current.alm?"HIGH":"LOW");
+        aceconvalues_current.valueChanged = true;
+
         if(aceconvalues_current.alm) {
             lv_obj_add_state(ui_SwitchALM, LV_STATE_CHECKED);
         } else {
@@ -1227,27 +1394,23 @@ void acecon_dev_tick() {
         }
     }
 
-
     
-    //================================================== Read ACEDATA =========================================*/
     
-    // Redraw Screen
-    if(lv_scr_act() == ui_OperationScreen && ((acedata_current.ValueChanged) || (aceconvalues_current.ValueChanged))){
 
+}
 
-        acedata_current.ValueChanged = false;
-        aceconvalues_current.ValueChanged = false;
-        
-        ui_update_acecon();
+void check_door_condition(){
 
-        lv_scr_load(lv_scr_act());
-    } 
+    // TODO: fill in Door POPPED and DOOR Disabled condition checks
+    // Place Holder Values
+    systemsettings_current.doorDisabled = false;
+    doorvalues_current.doorPopped = false;
 
 }
 
 void setup() {
-    
-   Wire.begin( 1,42,100*1000); 
+    SPIFFS.begin(false);
+    Wire.begin( 1,42,100*1000); 
     lv_init();
     display_init();
     input_init();
@@ -1298,19 +1461,24 @@ void setup() {
     digitalWrite(ACECON_PPS_OUT,LOW);
     digitalWrite(ACECON_ALM_OUT,LOW);
     digitalWrite(ACECON_HPS_OUT,LOW);
-   
-    //enable_ACEDATA_RX();
-
+      
     //================================================== Set System Defaults =========================================*/
-    systemsetting_default.AlarmPower = p_CarONCarOFF;
-    systemsetting_default.AutoSnoozeEnabled = false;
-    systemsetting_default.AuxInputEnabled = false;
-    systemsetting_default.BatteryVoltage = b_12;
-    systemsetting_default.DoorPower = p_CarONCarOFF;
-    systemsetting_default.StallMonitorEnabled = false;
-    systemsetting_default.TempAveragingEnabled = true;
+    systemsettings_default.AlarmPower = p_CarONCarOFF;
+    systemsettings_default.AutoSnoozeEnabled = false;
+    systemsettings_default.AuxInputEnabled = false;
+    systemsettings_default.BatteryVoltage = b_12;
+    systemsettings_default.DoorPower = p_CarONCarOFF;
+    systemsettings_default.StallMonitorEnabled = true;
+    systemsettings_default.TempAveragingEnabled = true;
+    systemsettings_default.doorDisabled = false;
+
+
+    systemsettings_current = systemsettings_default;
 
     acedata_current.ValueChanged = false;
+    tempvalues_current.valueChanged = true;
+    enginevalues_current.valueChanged = true;
+    doorvalues_current.valueChanged = true;
 
     set_HPS(HIGH);
     set_PPS(HIGH);
@@ -1324,6 +1492,41 @@ void setup() {
 
 void loop() {
 
+    if (last.cmd == COMMAND_ID::ACKNOWLEDGE){
+                
+        if (last.status == STATUS_CODE::XBEE_INITIALIZED){
+            
+            if (xbee_initialized){
+                MONITOR.println("XBEE Reset During Operation");
+                xbee_reset = true;
+            }
+
+            MONITOR.println("XBEE Initialized");
+            xbee_initialized = true;
+            
+            last.cmd = (COMMAND_ID)NULL;
+            last.status = (STATUS_CODE)NULL;
+
+        }else if (last.status == STATUS_CODE::XBEE_CELL_CONNECTED){
+            
+            MONITOR.println("XBEE Cell Connected");
+             xbee_cell_connected = true;
+            
+            // String str = "atdb\r";
+            // on_monitor_at(str.c_str());
+
+            last.cmd = (COMMAND_ID)NULL;
+            last.status = (STATUS_CODE)NULL;
+        }
+
+
+
+        
+
+    }
+
+    
+
     display_update();
     lv_timer_handler();
     
@@ -1335,6 +1538,13 @@ void loop() {
     }
 
     acecon_dev_tick();
+    check_door_condition();
+
+
+    ui_update_acecon();
+
+    
+
 
 }
 

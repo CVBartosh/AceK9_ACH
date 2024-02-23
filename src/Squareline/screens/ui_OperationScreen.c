@@ -29,18 +29,52 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_y(ui_ImgButtonBattery, -95);
     lv_obj_set_align(ui_ImgButtonBattery, LV_ALIGN_CENTER);
 
-    ui_ImgButtonDoor = lv_imgbtn_create(ui_OperationScreen);
-    lv_imgbtn_set_src(ui_ImgButtonDoor, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_cardoorenabledicon_png, NULL);
-    lv_imgbtn_set_src(ui_ImgButtonDoor, LV_IMGBTN_STATE_PRESSED, NULL, &ui_img_cardooropenicon_png, NULL);
-    lv_imgbtn_set_src(ui_ImgButtonDoor, LV_IMGBTN_STATE_DISABLED, NULL, &ui_img_cardoordisabledicon_png, NULL);
-    lv_obj_set_height(ui_ImgButtonDoor, 45);
-    lv_obj_set_width(ui_ImgButtonDoor, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_x(ui_ImgButtonDoor, -45);
-    lv_obj_set_y(ui_ImgButtonDoor, -95);
-    lv_obj_set_align(ui_ImgButtonDoor, LV_ALIGN_CENTER);
-    lv_obj_clear_flag(ui_ImgButtonDoor, LV_OBJ_FLAG_CLICKABLE);      /// Flags
-    lv_obj_set_style_img_recolor(ui_ImgButtonDoor, lv_color_hex(0xA30000), LV_PART_MAIN | LV_STATE_USER_1);
-    lv_obj_set_style_img_recolor_opa(ui_ImgButtonDoor, 0, LV_PART_MAIN | LV_STATE_USER_1);
+    ui_ImgButtonDoorClosed = lv_imgbtn_create(ui_OperationScreen);
+    lv_imgbtn_set_src(ui_ImgButtonDoorClosed, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_cardoorenabledicon_png, NULL);
+    lv_obj_set_height(ui_ImgButtonDoorClosed, 45);
+    lv_obj_set_width(ui_ImgButtonDoorClosed, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonDoorClosed, -45);
+    lv_obj_set_y(ui_ImgButtonDoorClosed, -95);
+    lv_obj_set_align(ui_ImgButtonDoorClosed, LV_ALIGN_CENTER);
+    lv_obj_clear_flag(ui_ImgButtonDoorClosed, LV_OBJ_FLAG_CLICKABLE);      /// Flags
+    lv_obj_set_style_img_recolor(ui_ImgButtonDoorClosed, lv_color_hex(0xA30000), LV_PART_MAIN | LV_STATE_USER_1);
+    lv_obj_set_style_img_recolor_opa(ui_ImgButtonDoorClosed, 0, LV_PART_MAIN | LV_STATE_USER_1);
+
+    ui_ImgButtonDoorOpen = lv_imgbtn_create(ui_OperationScreen);
+    lv_imgbtn_set_src(ui_ImgButtonDoorOpen, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_cardooropenicon_png, NULL);
+    lv_obj_set_height(ui_ImgButtonDoorOpen, 45);
+    lv_obj_set_width(ui_ImgButtonDoorOpen, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonDoorOpen, -45);
+    lv_obj_set_y(ui_ImgButtonDoorOpen, -95);
+    lv_obj_set_align(ui_ImgButtonDoorOpen, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_ImgButtonDoorOpen, LV_OBJ_FLAG_HIDDEN);     /// Flags
+    lv_obj_clear_flag(ui_ImgButtonDoorOpen, LV_OBJ_FLAG_CLICKABLE);      /// Flags
+    lv_obj_set_style_img_recolor(ui_ImgButtonDoorOpen, lv_color_hex(0xA30000), LV_PART_MAIN | LV_STATE_USER_1);
+    lv_obj_set_style_img_recolor_opa(ui_ImgButtonDoorOpen, 0, LV_PART_MAIN | LV_STATE_USER_1);
+
+    ui_ImgButtonDoorPopped = lv_imgbtn_create(ui_OperationScreen);
+    lv_imgbtn_set_src(ui_ImgButtonDoorPopped, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_cardoorpoppedicon_png, NULL);
+    lv_obj_set_height(ui_ImgButtonDoorPopped, 45);
+    lv_obj_set_width(ui_ImgButtonDoorPopped, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonDoorPopped, -45);
+    lv_obj_set_y(ui_ImgButtonDoorPopped, -95);
+    lv_obj_set_align(ui_ImgButtonDoorPopped, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_ImgButtonDoorPopped, LV_OBJ_FLAG_HIDDEN);     /// Flags
+    lv_obj_clear_flag(ui_ImgButtonDoorPopped, LV_OBJ_FLAG_CLICKABLE);      /// Flags
+    lv_obj_set_style_img_recolor(ui_ImgButtonDoorPopped, lv_color_hex(0xA30000), LV_PART_MAIN | LV_STATE_USER_1);
+    lv_obj_set_style_img_recolor_opa(ui_ImgButtonDoorPopped, 0, LV_PART_MAIN | LV_STATE_USER_1);
+
+    ui_ImgButtonDoorDisabled = lv_imgbtn_create(ui_OperationScreen);
+    lv_imgbtn_set_src(ui_ImgButtonDoorDisabled, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_cardoordisabledicon_png, NULL);
+    lv_obj_set_height(ui_ImgButtonDoorDisabled, 45);
+    lv_obj_set_width(ui_ImgButtonDoorDisabled, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonDoorDisabled, -45);
+    lv_obj_set_y(ui_ImgButtonDoorDisabled, -95);
+    lv_obj_set_align(ui_ImgButtonDoorDisabled, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_ImgButtonDoorDisabled, LV_OBJ_FLAG_HIDDEN);     /// Flags
+    lv_obj_clear_flag(ui_ImgButtonDoorDisabled, LV_OBJ_FLAG_CLICKABLE);      /// Flags
+    lv_obj_set_style_img_recolor(ui_ImgButtonDoorDisabled, lv_color_hex(0xA30000), LV_PART_MAIN | LV_STATE_USER_1);
+    lv_obj_set_style_img_recolor_opa(ui_ImgButtonDoorDisabled, 0, LV_PART_MAIN | LV_STATE_USER_1);
 
     ui_ImgButtonKey = lv_imgbtn_create(ui_OperationScreen);
     lv_imgbtn_set_src(ui_ImgButtonKey, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_keyenabledicon_png, NULL);

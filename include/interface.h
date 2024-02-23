@@ -67,6 +67,7 @@ struct data_packet
     char topicName[16];                         //  TopicName | 16 bytes | string padded by zeros | Topic to publish to
     uint32_t qos;                               //  qos | 4 bytes | 32-bit unsigned word | Quality of Service
     ACE_BOOL retainFlag;                        //  retainFlag | ACE_BOOL 32-bit unsigned word | 0 = False, Non-Zero = True
+    // ================ Variable Data Below this Point =====================
     char timeStampUTC[32];                      //  timeStampUTC | 32 bytes | string padded by zeros |
     ACE_BOOL powerOn;                           //  powerOn | ACE_BOOL 32-bit unsigned word | 0 = False, Non-Zero = True
     ACE_BOOL ignitionOn;                        //  ignitionOn | ACE_BOOL 32-bit unsigned word | 0 = False, Non-Zero = True
@@ -90,6 +91,7 @@ struct status_packet
     char topicName[16];                         //  TopicName | 16 bytes | string padded by zeros |
     uint32_t qos;                               //  qos | 4 bytes | 32-bit unsigned word | 
     ACE_BOOL retainFlag;                        //  retainFlag | ACE_BOOL 32-bit unsigned word | 0 = False, Non-Zero = True
+    // ================ Variable Data Below this Point =====================
     char unitID[32];                            //  unitID | 32 bytes | string padded by zeros |
     char unitname[16];                          //  unitname | 16 bytes | string padded by zeros |
     char unitFirmwareVersion[16];               //  unitFirmwareVersion | 16 bytes | string padded by zeros |
@@ -131,6 +133,7 @@ struct config_packet
     char topicName[16];                         // TopicName | 16 bytes | string padded by zeros |
     uint32_t qos;                               // qos  | 4 bytes | 32-bit unsigned word | 
     ACE_BOOL retainFlag;                        // retainFlag | ACE_BOOL 32-bit unsigned word | 0 = False, Non-Zero = True
+    // ================ Variable Data Below this Point =====================
     char serverDomain[128];                     // serverDomain | 128 bytes | string padded by zeros |
     char firmwareVersion[16];                   // firmwareVersion | 16 bytes | string padded by zeros |
     char firmwareChecksum[32];                  // firmwareChecksum | 32 bytes | string padded by zeros |

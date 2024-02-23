@@ -34,7 +34,10 @@ void ui_OperationScreen_screen_init(void);
 extern lv_obj_t * ui_OperationScreen;
 extern lv_obj_t * ui_ImgButton7;
 extern lv_obj_t * ui_ImgButtonBattery;
-extern lv_obj_t * ui_ImgButtonDoor;
+extern lv_obj_t * ui_ImgButtonDoorClosed;
+extern lv_obj_t * ui_ImgButtonDoorOpen;
+extern lv_obj_t * ui_ImgButtonDoorPopped;
+extern lv_obj_t * ui_ImgButtonDoorDisabled;
 extern lv_obj_t * ui_ImgButtonKey;
 extern lv_obj_t * ui_ImgButtonEngine;
 extern lv_obj_t * ui_ImgButtonWiFi;
@@ -210,6 +213,7 @@ LV_IMG_DECLARE(ui_img_batteryenabledicon_png);    // assets\BatteryEnabledIcon.p
 LV_IMG_DECLARE(ui_img_batterydisabledicon_png);    // assets\BatteryDisabledIcon.png
 LV_IMG_DECLARE(ui_img_cardoorenabledicon_png);    // assets\CarDoorEnabledIcon.png
 LV_IMG_DECLARE(ui_img_cardooropenicon_png);    // assets\CarDoorOpenIcon.png
+LV_IMG_DECLARE(ui_img_cardoorpoppedicon_png);    // assets\CarDoorPoppedIcon.png
 LV_IMG_DECLARE(ui_img_cardoordisabledicon_png);    // assets\CarDoorDisabledIcon.png
 LV_IMG_DECLARE(ui_img_keyenabledicon_png);    // assets\KeyEnabledIcon.png
 LV_IMG_DECLARE(ui_img_keyicon_png);    // assets\KeyIcon.png
