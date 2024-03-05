@@ -10,14 +10,14 @@ void ui_MenuScreen5_screen_init(void)
     ui_MenuScreen5 = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_MenuScreen5, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
-    ui_ImgButton24 = lv_imgbtn_create(ui_MenuScreen5);
-    lv_imgbtn_set_src(ui_ImgButton24, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowlefticon_png, NULL);
-    lv_imgbtn_set_src(ui_ImgButton24, LV_IMGBTN_STATE_DISABLED, NULL, &ui_img_arrowiconblank_png, NULL);
-    lv_obj_set_height(ui_ImgButton24, 240);
-    lv_obj_set_width(ui_ImgButton24, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_x(ui_ImgButton24, -138);
-    lv_obj_set_y(ui_ImgButton24, 0);
-    lv_obj_set_align(ui_ImgButton24, LV_ALIGN_CENTER);
+    ui_ImgButtonExitMenu5 = lv_imgbtn_create(ui_MenuScreen5);
+    lv_imgbtn_set_src(ui_ImgButtonExitMenu5, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowlefticon_png, NULL);
+    lv_imgbtn_set_src(ui_ImgButtonExitMenu5, LV_IMGBTN_STATE_DISABLED, NULL, &ui_img_arrowiconblank_png, NULL);
+    lv_obj_set_height(ui_ImgButtonExitMenu5, 240);
+    lv_obj_set_width(ui_ImgButtonExitMenu5, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonExitMenu5, -138);
+    lv_obj_set_y(ui_ImgButtonExitMenu5, 0);
+    lv_obj_set_align(ui_ImgButtonExitMenu5, LV_ALIGN_CENTER);
 
     ui_ImgButton25 = lv_imgbtn_create(ui_MenuScreen5);
     lv_imgbtn_set_src(ui_ImgButton25, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowrighticon_png, NULL);
@@ -135,7 +135,7 @@ void ui_MenuScreen5_screen_init(void)
     lv_obj_set_style_bg_color(ui_LabelLog7, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_LabelLog7, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_add_event_cb(ui_ImgButton24, ui_event_ImgButton24, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonExitMenu5, ui_event_ImgButtonExitMenu5, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton25, ui_event_ImgButton25, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton26, ui_event_ImgButton26, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton27, ui_event_ImgButton27, LV_EVENT_ALL, NULL);

@@ -10,14 +10,14 @@ void ui_MenuScreen1_screen_init(void)
     ui_MenuScreen1 = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_MenuScreen1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
-    ui_ImgButton2 = lv_imgbtn_create(ui_MenuScreen1);
-    lv_imgbtn_set_src(ui_ImgButton2, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowlefticon_png, NULL);
-    lv_imgbtn_set_src(ui_ImgButton2, LV_IMGBTN_STATE_DISABLED, NULL, &ui_img_arrowiconblank_png, NULL);
-    lv_obj_set_height(ui_ImgButton2, 240);
-    lv_obj_set_width(ui_ImgButton2, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_x(ui_ImgButton2, -138);
-    lv_obj_set_y(ui_ImgButton2, 0);
-    lv_obj_set_align(ui_ImgButton2, LV_ALIGN_CENTER);
+    ui_ImgButtonExitMenu1 = lv_imgbtn_create(ui_MenuScreen1);
+    lv_imgbtn_set_src(ui_ImgButtonExitMenu1, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowlefticon_png, NULL);
+    lv_imgbtn_set_src(ui_ImgButtonExitMenu1, LV_IMGBTN_STATE_DISABLED, NULL, &ui_img_arrowiconblank_png, NULL);
+    lv_obj_set_height(ui_ImgButtonExitMenu1, 240);
+    lv_obj_set_width(ui_ImgButtonExitMenu1, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonExitMenu1, -138);
+    lv_obj_set_y(ui_ImgButtonExitMenu1, 0);
+    lv_obj_set_align(ui_ImgButtonExitMenu1, LV_ALIGN_CENTER);
 
     ui_ImgButton3 = lv_imgbtn_create(ui_MenuScreen1);
     lv_imgbtn_set_src(ui_ImgButton3, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowrighticon_png, NULL);
@@ -173,7 +173,7 @@ void ui_MenuScreen1_screen_init(void)
     lv_obj_set_align(ui_CheckboxAuxIn, LV_ALIGN_CENTER);
     lv_obj_add_flag(ui_CheckboxAuxIn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
 
-    lv_obj_add_event_cb(ui_ImgButton2, ui_event_ImgButton2, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonExitMenu1, ui_event_ImgButtonExitMenu1, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton3, ui_event_ImgButton3, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton4, ui_event_ImgButton4, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton16, ui_event_ImgButton16, LV_EVENT_ALL, NULL);

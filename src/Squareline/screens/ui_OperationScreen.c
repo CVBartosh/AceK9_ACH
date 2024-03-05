@@ -94,14 +94,49 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_y(ui_ImgButtonEngine, -95);
     lv_obj_set_align(ui_ImgButtonEngine, LV_ALIGN_CENTER);
 
-    ui_ImgButtonWiFi = lv_imgbtn_create(ui_OperationScreen);
-    lv_imgbtn_set_src(ui_ImgButtonWiFi, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_wifienabledicon_png, NULL);
-    lv_imgbtn_set_src(ui_ImgButtonWiFi, LV_IMGBTN_STATE_PRESSED, NULL, &ui_img_wifidisabledicon_png, NULL);
-    lv_obj_set_height(ui_ImgButtonWiFi, 45);
-    lv_obj_set_width(ui_ImgButtonWiFi, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_x(ui_ImgButtonWiFi, 89);
-    lv_obj_set_y(ui_ImgButtonWiFi, -95);
-    lv_obj_set_align(ui_ImgButtonWiFi, LV_ALIGN_CENTER);
+    ui_ImgButtonWiFi0 = lv_imgbtn_create(ui_OperationScreen);
+    lv_imgbtn_set_src(ui_ImgButtonWiFi0, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_wifi_0_png, NULL);
+    lv_obj_set_height(ui_ImgButtonWiFi0, 45);
+    lv_obj_set_width(ui_ImgButtonWiFi0, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonWiFi0, 89);
+    lv_obj_set_y(ui_ImgButtonWiFi0, -95);
+    lv_obj_set_align(ui_ImgButtonWiFi0, LV_ALIGN_CENTER);
+
+    ui_ImgButtonWiFi1 = lv_imgbtn_create(ui_OperationScreen);
+    lv_imgbtn_set_src(ui_ImgButtonWiFi1, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_wifi_1_png, NULL);
+    lv_obj_set_height(ui_ImgButtonWiFi1, 45);
+    lv_obj_set_width(ui_ImgButtonWiFi1, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonWiFi1, 89);
+    lv_obj_set_y(ui_ImgButtonWiFi1, -95);
+    lv_obj_set_align(ui_ImgButtonWiFi1, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_ImgButtonWiFi1, LV_OBJ_FLAG_HIDDEN);     /// Flags
+
+    ui_ImgButtonWiFi2 = lv_imgbtn_create(ui_OperationScreen);
+    lv_imgbtn_set_src(ui_ImgButtonWiFi2, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_wifi_2_png, NULL);
+    lv_obj_set_height(ui_ImgButtonWiFi2, 45);
+    lv_obj_set_width(ui_ImgButtonWiFi2, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonWiFi2, 89);
+    lv_obj_set_y(ui_ImgButtonWiFi2, -95);
+    lv_obj_set_align(ui_ImgButtonWiFi2, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_ImgButtonWiFi2, LV_OBJ_FLAG_HIDDEN);     /// Flags
+
+    ui_ImgButtonWiFi3 = lv_imgbtn_create(ui_OperationScreen);
+    lv_imgbtn_set_src(ui_ImgButtonWiFi3, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_wifi_3_png, NULL);
+    lv_obj_set_height(ui_ImgButtonWiFi3, 45);
+    lv_obj_set_width(ui_ImgButtonWiFi3, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonWiFi3, 89);
+    lv_obj_set_y(ui_ImgButtonWiFi3, -95);
+    lv_obj_set_align(ui_ImgButtonWiFi3, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_ImgButtonWiFi3, LV_OBJ_FLAG_HIDDEN);     /// Flags
+
+    ui_ImgButtonWiFi4 = lv_imgbtn_create(ui_OperationScreen);
+    lv_imgbtn_set_src(ui_ImgButtonWiFi4, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_wifi_4_png, NULL);
+    lv_obj_set_height(ui_ImgButtonWiFi4, 45);
+    lv_obj_set_width(ui_ImgButtonWiFi4, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonWiFi4, 89);
+    lv_obj_set_y(ui_ImgButtonWiFi4, -95);
+    lv_obj_set_align(ui_ImgButtonWiFi4, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_ImgButtonWiFi4, LV_OBJ_FLAG_HIDDEN);     /// Flags
 
     ui_ImgTempCircle = lv_imgbtn_create(ui_OperationScreen);
     lv_imgbtn_set_src(ui_ImgTempCircle, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_greentempcircle_png, NULL);
@@ -136,14 +171,14 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_align(ui_LabelTempAvg, LV_ALIGN_CENTER);
     lv_label_set_text(ui_LabelTempAvg, "41.5");
 
-    ui_ImgButton6 = lv_imgbtn_create(ui_OperationScreen);
-    lv_imgbtn_set_src(ui_ImgButton6, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowrighticon_png, NULL);
-    lv_obj_set_height(ui_ImgButton6, 240);
-    lv_obj_set_width(ui_ImgButton6, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_x(ui_ImgButton6, 137);
-    lv_obj_set_y(ui_ImgButton6, 0);
-    lv_obj_set_align(ui_ImgButton6, LV_ALIGN_CENTER);
+    ui_ImgButtonEnterMenu1 = lv_imgbtn_create(ui_OperationScreen);
+    lv_imgbtn_set_src(ui_ImgButtonEnterMenu1, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowrighticon_png, NULL);
+    lv_obj_set_height(ui_ImgButtonEnterMenu1, 240);
+    lv_obj_set_width(ui_ImgButtonEnterMenu1, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonEnterMenu1, 137);
+    lv_obj_set_y(ui_ImgButtonEnterMenu1, 0);
+    lv_obj_set_align(ui_ImgButtonEnterMenu1, LV_ALIGN_CENTER);
 
-    lv_obj_add_event_cb(ui_ImgButton6, ui_event_ImgButton6, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonEnterMenu1, ui_event_ImgButtonEnterMenu1, LV_EVENT_ALL, NULL);
 
 }

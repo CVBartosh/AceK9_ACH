@@ -10,14 +10,14 @@ void ui_MenuScreen3_screen_init(void)
     ui_MenuScreen3 = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_MenuScreen3, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
-    ui_ImgButton20 = lv_imgbtn_create(ui_MenuScreen3);
-    lv_imgbtn_set_src(ui_ImgButton20, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowlefticon_png, NULL);
-    lv_imgbtn_set_src(ui_ImgButton20, LV_IMGBTN_STATE_DISABLED, NULL, &ui_img_arrowiconblank_png, NULL);
-    lv_obj_set_height(ui_ImgButton20, 240);
-    lv_obj_set_width(ui_ImgButton20, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_x(ui_ImgButton20, -138);
-    lv_obj_set_y(ui_ImgButton20, 0);
-    lv_obj_set_align(ui_ImgButton20, LV_ALIGN_CENTER);
+    ui_ImgButtonExitMenu3 = lv_imgbtn_create(ui_MenuScreen3);
+    lv_imgbtn_set_src(ui_ImgButtonExitMenu3, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowlefticon_png, NULL);
+    lv_imgbtn_set_src(ui_ImgButtonExitMenu3, LV_IMGBTN_STATE_DISABLED, NULL, &ui_img_arrowiconblank_png, NULL);
+    lv_obj_set_height(ui_ImgButtonExitMenu3, 240);
+    lv_obj_set_width(ui_ImgButtonExitMenu3, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_x(ui_ImgButtonExitMenu3, -138);
+    lv_obj_set_y(ui_ImgButtonExitMenu3, 0);
+    lv_obj_set_align(ui_ImgButtonExitMenu3, LV_ALIGN_CENTER);
 
     ui_ImgButton21 = lv_imgbtn_create(ui_MenuScreen3);
     lv_imgbtn_set_src(ui_ImgButton21, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowrighticon_png, NULL);
@@ -116,7 +116,7 @@ void ui_MenuScreen3_screen_init(void)
     lv_obj_set_style_text_opa(ui_LabelControlHeadSNValue1, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_LabelControlHeadSNValue1, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_add_event_cb(ui_ImgButton20, ui_event_ImgButton20, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonExitMenu3, ui_event_ImgButtonExitMenu3, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton21, ui_event_ImgButton21, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton22, ui_event_ImgButton22, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton23, ui_event_ImgButton23, LV_EVENT_ALL, NULL);

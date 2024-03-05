@@ -1,3 +1,6 @@
+// PlatformIO CLI command line for regenerating:
+// ./h2csv include/interface.h /header /output init_csv.h
+
 // XBee - ESP32 Interface Protocol
 // Rev 00.00.01
 // 08/01/23
@@ -10,6 +13,8 @@
 #include <stddef.h>
 
 enum struct STATUS_CODE : int32_t {
+    UNKOWNDATAFROMSERVER = -4,
+    UNSUPPORTEDTYPEININIT = -3,
     XBEE_NOT_INTIALIZED = -2,
     INVALID_COMMAND = -1,
     SUCCESS = 0,
@@ -81,7 +86,8 @@ struct data_packet
     uint32_t batteryVoltage;                    //  batteryVoltage | 4 bytes | 32-bit unsigned word | 
     char doorPopUTC[32];                        //  doorPopUTC | 32 bytes | string padded by zeros |
     uint32_t version;                           //  version | 4 bytes | 32-bit unsigned word | 
-    
+    //ACE_BOOL newstuff;
+
 };
 
 struct status_packet

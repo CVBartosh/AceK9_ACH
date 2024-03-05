@@ -41,6 +41,7 @@ struct TempValues{
     TempState rightTempState;
     float avgTemp;
     bool valueChanged;
+    bool unitsChanged;
 };
 
 TempValues tempvalues_current;
@@ -100,11 +101,19 @@ String VIMSerialNumber;
 
 //================================================== GLOBAL VARIABLES =========================================*/
 
-struct last_info {
+struct last_packet_info {
     STATUS_CODE status; // = STATUS_CODE::SUCCESS;
     COMMAND_ID cmd; // = (COMMAND_ID)0;
 };
-static last_info last = {STATUS_CODE::SUCCESS,(COMMAND_ID)0};
+static last_packet_info last_packet = {STATUS_CODE::SUCCESS,(COMMAND_ID)0};
+
+struct last_at_info {
+    char commandstr[2];
+    uint32_t value;
+    bool value_received;
+};
+
+static last_at_info last_at_cmd;
 
 static config_packet config_data;
 
@@ -140,8 +149,16 @@ struct acedata{
 acedata acedata_current;
 acedata acedata_previous;
 
-enum PowerOpt {p_CarONCarOFF,p_CarONManOFF,p_ManONManOFF,p_NoK9Left,p_OFF,p_AutoStart};
+enum PowerOpt {p_CarONCarOFF,p_CarONManOFF,p_ManONManOFF,p_NoK9Left,p_OFF,p_AlwaysOFF};
 enum Batt {b_10 = 1,b_105 = 2,b_11 = 3,b_115 =4,b_12 =5};
+
+#define HotTempArraySize 19
+const int HotTempOpt_F[HotTempArraySize] = { 77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95 };
+const int HotTempOpt_C[HotTempArraySize] = { 25,26,26,27,27,28,28,29,29,30,31,31,32,32,33,33,34,34,35 };
+
+#define ColdTempArraySize 14
+const int ColdTempOpt_F[ColdTempArraySize] = { 0,10,14,18,21,25,28,32,38,42,46,50,54,58 };
+const int ColdTempOpt_C[ColdTempArraySize] = { 0,-12,-10,-8,-6,-4,-2,0,2,4,6,8,10,12 };
 
 struct SystemSettings{
     bool TempAveragingEnabled;
@@ -149,6 +166,9 @@ struct SystemSettings{
     bool StallMonitorEnabled;
     bool AuxInputEnabled;
     bool doorDisabled;
+    int AlarmHotSetIndex;
+    int AlarmColdSetIndex;
+    bool AlarmUnitF;
     PowerOpt AlarmPower;
     PowerOpt DoorPower;
     Batt BatteryVoltage;
@@ -159,7 +179,7 @@ SystemSettings systemsettings_current;
 SystemSettings systemsettings_previous;
 SystemSettings systemsettings_default;
 
-#define EngineStallThreshold  5
+#define EngineStallThreshold  1
 
 //================================================== XBEE STUFF =========================================*/
     xbee_serial_t XBEE_SERPORT;
@@ -167,8 +187,25 @@ SystemSettings systemsettings_default;
     xbee_dev_t my_xbee;
     bool xbee_initialized = false;
     bool xbee_cell_connected = false;
-    int xbee_signal_strength = 255;
+    unsigned long signal_strength_timer;
+    #define signal_strength_timer_threshold 1*60*1000
+    uint32_t xbee_signal_strength_current = 255;
+    bool xbee_signal_strength_changed = false;
+
+    #define XBEE_SIGNALSTRENGTH0 0x69
+    #define XBEE_SIGNALSTRENGTH1 0x61
+    #define XBEE_SIGNALSTRENGTH2 0x53
+    #define XBEE_SIGNALSTRENGTH3 0x45
+    #define XBEE_SIGNALSTRENGTH4 0x37
+    
     bool xbee_reset = false;
+    #define XBEE_RXD    4
+    #define XBEE_TXD    5
+    #define XBEE_RSSI   6
+    #define XBEE_RESET  7
+    #define XBEE_CMD    15
+    #define XBEE_LINK   16
+
 
 //================================================== ACECON GPIOs =========================================
     #define ACECON_PPS_IN 9
@@ -212,26 +249,38 @@ SystemSettings systemsettings_default;
     #define ACEDATA_VIM_SN_LENGTH 16
 
 
+bool SettingsLoaded = false;
+
 void save_settings() {
 
-    SPIFFS.remove("/setttings");
+    if(SPIFFS.exists("/settings")) {
+        SPIFFS.remove("/settings");
+    }
     File file = SPIFFS.open("/settings","wb",true);
-    file.write((uint8_t*)&systemsettings_current,sizeof(systemsettings_current));
+    if(sizeof(systemsettings_current)>file.write((uint8_t*)&systemsettings_current,sizeof(systemsettings_current))) {
+        MONITOR.println("Error writing settings file. Too few bytes written");
+    }
     file.close();
+
 }
+
+void print_settings(){
+    MONITOR.println("Printing System Settings");
+    MONITOR.println("AlarmPower: " + (String)(systemsettings_current.AlarmPower));
+}
+
 bool load_settings() {
+    MONITOR.println("Loading Settings File");
     memcpy(&systemsettings_current,&systemsettings_default,sizeof(systemsettings_current));
     File file = SPIFFS.open("/settings","rb",false);
     if(!file) {
-        return false;
-    }
-    if(file.size()<sizeof(systemsettings_current)) {
-        file.close();
+        MONITOR.println("Settings File Not Found");
         return false;
     }
     if(sizeof(systemsettings_current)>file.read((uint8_t*)&systemsettings_current,sizeof(systemsettings_current))) {
         memcpy(&systemsettings_current,&systemsettings_default,sizeof(systemsettings_current));
         file.close();
+        MONITOR.println("Settings File Invalid (read length)");
         return false;
     }
     file.close();
@@ -265,8 +314,8 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
             acknowledge_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
             MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
-            last.cmd = pck.cmd_ID;
-            last.status = pck.status;
+            last_packet.cmd = pck.cmd_ID;
+            last_packet.status = pck.status;
             last_received = true;
         }
         break;
@@ -274,7 +323,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
             MONITOR.println("Command Packet Received");
             command_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
-            last.cmd = pck.cmd_ID;
+            last_packet.cmd = pck.cmd_ID;
             command_data = pck;
             last_received = true;
         }
@@ -284,7 +333,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
             config_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
             
-            last.cmd = pck.cmd_ID;
+            last_packet.cmd = pck.cmd_ID;
             config_data = pck;
             last_received = true;
             
@@ -382,7 +431,7 @@ void set_HPS(bool value)
     }else{
         lv_obj_clear_state(ui_SwitchHPS, LV_STATE_CHECKED);
     }
-    MONITOR.printf("HPS Val Changed to  %s\r\n",aceconvalues_current.hps?"HIGH":"LOW");
+    MONITOR.printf("HPS Val Set to  %s\r\n",aceconvalues_current.hps?"HIGH":"LOW");
     digitalWrite(ACECON_HPS_OUT,value);
 }
 
@@ -395,7 +444,7 @@ void set_PPS(bool value)
     }else{
         lv_obj_clear_state(ui_SwitchPPS, LV_STATE_CHECKED);
     }
-    MONITOR.printf("PPS Val Changed to  %s\r\n",aceconvalues_current.pps?"HIGH":"LOW");
+    MONITOR.printf("PPS Val Set to  %s\r\n",aceconvalues_current.pps?"HIGH":"LOW");
     digitalWrite(ACECON_PPS_OUT,value);
 }
 
@@ -406,7 +455,7 @@ void set_PPT(bool value)
     }else{
         lv_obj_clear_state(ui_SwitchPPT, LV_STATE_CHECKED);
     }
-    MONITOR.printf("PPT Val Changed to  %s\r\n",aceconvalues_current.ppt?"HIGH":"LOW");
+    MONITOR.printf("PPT Val Set to  %s\r\n",aceconvalues_current.ppt?"HIGH":"LOW");
     digitalWrite(ACECON_PPT_OUT,value);
 }
 
@@ -419,7 +468,7 @@ void set_ALM(bool value)
     }else{
         lv_obj_clear_state(ui_SwitchALM, LV_STATE_CHECKED);
     }
-    MONITOR.printf("ALM Val Changed to  %s\r\n",aceconvalues_current.alm?"HIGH":"LOW");
+    MONITOR.printf("ALM Val Set to  %s\r\n",aceconvalues_current.alm?"HIGH":"LOW");
     digitalWrite(ACECON_ALM_OUT,value);
 }
 
@@ -453,6 +502,9 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
     const uint8_t FAR *p;
 
     MONITOR.printf("\nResponse for: %s\n", response->command.str);
+    
+    last_at_cmd.commandstr[0] = response->command.str[0];
+    last_at_cmd.commandstr[1] = response->command.str[1];
 
     if (response->flags & XBEE_CMD_RESP_FLAG_TIMEOUT)
     {
@@ -495,6 +547,10 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
         // format hex string with (2 * number of bytes in value) leading zeros
         MONITOR.printf("= 0x%0*" PRIX32 " (%" PRIu32 ")\n", length * 2, response->value,
                       response->value);
+
+        last_at_cmd.value = response->value;
+        last_at_cmd.value_received = true;
+
     }
     else if (length <= 32)
     {
@@ -517,11 +573,11 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
 
 void on_xbee_error(COMMAND_ID id, STATUS_CODE code) {
     MONITOR.printf("XBee Error: Command (%d), Status (%d)\n",(int)id,(int)code);
-    last.status = (STATUS_CODE)0;
+    last_packet.status = (STATUS_CODE)0;
 }
 
 void on_monitor_init(const char* data) {
-            // Initialize the AT Command layer for this XBee device and have the
+        // Initialize the AT Command layer for this XBee device and have the
         // driver query it for basic information (hardware version, firmware version,
         // serial number, IEEE address, etc.)
         xbee_cmd_init_device(&my_xbee);
@@ -564,7 +620,7 @@ void on_monitor_at(const char* data) {
 }
 
 void on_monitor_connect(const char* str) {
-    last.cmd = COMMAND_ID::CONNECT;
+    last_packet.cmd = COMMAND_ID::CONNECT;
     connect_packet data;
     memset(&data,0,sizeof(data));
     strcpy(data.host,"acek9server.com");
@@ -584,7 +640,7 @@ void on_monitor_connect(const char* str) {
         MONITOR.println("Out of memory");
         while(1);
     }
-    payload[0]=(uint8_t)last.cmd;
+    payload[0]=(uint8_t)last_packet.cmd;
     memcpy(payload+1,&crc,sizeof(uint32_t));
     memcpy(payload+5,&data,sizeof(data));
         
@@ -604,7 +660,7 @@ void on_monitor_connect(const char* str) {
 }
 
 void on_monitor_data(const char* str) {
-    last.cmd = COMMAND_ID::DATA;
+    last_packet.cmd = COMMAND_ID::DATA;
     data_packet data;
     memset(&data, 0, sizeof(data));
     strcpy(data.topicName, "data");
@@ -624,6 +680,7 @@ void on_monitor_data(const char* str) {
     data.batteryVoltage = 141;
     strcpy(data.doorPopUTC, "2020-09-11T08:02:17:350Z");
     data.version = 2;
+    //data.newstuff = ACE_TRUE;
 
     uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
     
@@ -632,7 +689,7 @@ void on_monitor_data(const char* str) {
         MONITOR.println("Out of memory");
         while(1);
     }
-    payload[0]=(uint8_t)last.cmd;
+    payload[0]=(uint8_t)last_packet.cmd;
     memcpy(payload+1,&crc,sizeof(uint32_t));
     memcpy(payload+5,&data,sizeof(data));
         
@@ -653,7 +710,7 @@ void on_monitor_data(const char* str) {
 
 void on_monitor_connection(const char* str) {
     
-    last.cmd = COMMAND_ID::CONNECTION;
+    last_packet.cmd = COMMAND_ID::CONNECTION;
 
     connection_packet data;
     memset(&data, 0, sizeof(data));
@@ -669,7 +726,7 @@ void on_monitor_connection(const char* str) {
         MONITOR.println("Out of memory");
         while(1);
     }
-    payload[0]=(uint8_t)last.cmd;
+    payload[0]=(uint8_t)last_packet.cmd;
     memcpy(payload+1,&crc,sizeof(uint32_t));
     memcpy(payload+5,&data,sizeof(data));
         
@@ -690,7 +747,7 @@ void on_monitor_connection(const char* str) {
 
 void on_monitor_status(const char* str) {
     
-    last.cmd = COMMAND_ID::STATUS;
+    last_packet.cmd = COMMAND_ID::STATUS;
 
     status_packet data;
     memset(&data, 0, sizeof(data));
@@ -716,7 +773,7 @@ void on_monitor_status(const char* str) {
         MONITOR.println("Out of memory");
         while(1);
     }
-    payload[0]=(uint8_t)last.cmd;
+    payload[0]=(uint8_t)last_packet.cmd;
     memcpy(payload+1,&crc,sizeof(uint32_t));
     memcpy(payload+5,&data,sizeof(data));
         
@@ -737,7 +794,7 @@ void on_monitor_status(const char* str) {
 
 void on_monitor_log(const char* str) {
     
-    last.cmd = COMMAND_ID::LOG;
+    last_packet.cmd = COMMAND_ID::LOG;
 
     log_packet data;
     memset(&data, 0, sizeof(data));
@@ -755,7 +812,7 @@ void on_monitor_log(const char* str) {
         MONITOR.println("Out of memory");
         while(1);
     }
-    payload[0]=(uint8_t)last.cmd;
+    payload[0]=(uint8_t)last_packet.cmd;
     memcpy(payload+1,&crc,sizeof(uint32_t));
     memcpy(payload+5,&data,sizeof(data));
         
@@ -776,7 +833,7 @@ void on_monitor_log(const char* str) {
 
 void on_monitor_config(const char* str) {
     
-    last.cmd = COMMAND_ID::CONFIG;
+    last_packet.cmd = COMMAND_ID::CONFIG;
 
     config_packet data;
     memset(&data, 0, sizeof(data));
@@ -791,7 +848,7 @@ void on_monitor_config(const char* str) {
         MONITOR.println("Out of memory");
         while(1);
     }
-    payload[0]=(uint8_t)last.cmd;
+    payload[0]=(uint8_t)last_packet.cmd;
     memcpy(payload+1,&crc,sizeof(uint32_t));
     memcpy(payload+5,&data,sizeof(data));
         
@@ -810,9 +867,45 @@ void on_monitor_config(const char* str) {
     
 }
 
-void on_monitor_command(const char* str) {
+void on_monitor_subscribe7(const char* str) {
     
-    last.cmd = COMMAND_ID::COMMAND;
+    last_packet.cmd = COMMAND_ID::CONFIG;
+
+    command_packet data;
+    memset(&data, 0, sizeof(data));
+    strcpy(data.topicName, "config");
+    data.qos = 1;
+    data.retainFlag = ACE_FALSE;
+        
+    uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
+    
+    uint8_t* payload = (uint8_t*)malloc(sizeof(data)+5);
+    if(payload==nullptr) {
+        MONITOR.println("Out of memory");
+        while(1);
+    }
+    payload[0]=(uint8_t)last_packet.cmd;
+    memcpy(payload+1,&crc,sizeof(uint32_t));
+    memcpy(payload+5,&data,sizeof(data));
+
+    status = sendUserDataRelayAPIFrame(&my_xbee,(const char*)payload, sizeof(data)+5); 
+    free(payload);
+
+    if (status < 0) 
+    {
+        MONITOR.printf("Error %d sending config packet\n", status);
+    }
+    else 
+    {
+        
+    }
+
+    
+}
+
+void on_monitor_subscribe8(const char* str) {
+    
+    last_packet.cmd = COMMAND_ID::COMMAND;
 
     command_packet data;
     memset(&data, 0, sizeof(data));
@@ -827,10 +920,10 @@ void on_monitor_command(const char* str) {
         MONITOR.println("Out of memory");
         while(1);
     }
-    payload[0]=(uint8_t)last.cmd;
+    payload[0]=(uint8_t)last_packet.cmd;
     memcpy(payload+1,&crc,sizeof(uint32_t));
     memcpy(payload+5,&data,sizeof(data));
-        
+
     status = sendUserDataRelayAPIFrame(&my_xbee,(const char*)payload, sizeof(data)+5); 
     free(payload);
 
@@ -845,6 +938,7 @@ void on_monitor_command(const char* str) {
 
     
 }
+
 
 void monitor_dev_tick(HardwareSerial& s) {
     if(s.available()) {
@@ -869,34 +963,57 @@ void monitor_dev_tick(HardwareSerial& s) {
             on_monitor_connection(str.c_str());
         } else if (cmd=="config"){
             on_monitor_config(str.c_str());
-        } else if (cmd=="command"){
-            on_monitor_command(str.c_str());
-        } else if(cmd.substring(0,9)=="xbee init"){
-            send_init_packet();
+        } else if (cmd=="subscribe7"){
+            on_monitor_subscribe7(str.c_str()); 
+        } else if (cmd=="subscribe8"){
+            on_monitor_subscribe8(str.c_str());
+        } else if (cmd=="save default settings"){
+            systemsettings_current = systemsettings_default;    
+            save_settings();            
+        } else if (cmd=="save custom settings"){
+            systemsettings_current.AlarmPower = PowerOpt::p_ManONManOFF;
+            save_settings();
+        } else if (cmd=="report settings"){
+            print_settings();
         }
     }
+}
+
+float ConvertFtoC(float F)
+{
+	return (round((F - 32) * (5.0 / 9)));
 }
 
 void ui_update_acecon() {
 
     bool redrawFlag = false;
 
-    if (tempvalues_current.valueChanged){
+    if (tempvalues_current.valueChanged || tempvalues_current.unitsChanged){
         //MONITOR.println("UI: Temp Values Need Updating");
         redrawFlag = true;
 
-        if(tempvalues_previous.leftTemp!=tempvalues_current.leftTemp) {
-        //MONITOR.println("UI: Updating Left Temp");
-        static char szLeftTemp[6];
-        sprintf(szLeftTemp,"%3.1f",tempvalues_current.leftTemp);
-        lv_label_set_text_static(ui_LabelTemp1Val,szLeftTemp);
-        lv_label_set_text_static(ui_LabelLeftTemp,szLeftTemp);
+        if(tempvalues_previous.leftTemp!=tempvalues_current.leftTemp || tempvalues_current.unitsChanged) {
+            //MONITOR.println("UI: Updating Left Temp");
+            static char szLeftTemp[6];
+            if (systemsettings_current.AlarmUnitF){
+                sprintf(szLeftTemp,"%3.1f",tempvalues_current.leftTemp);
+            }else{
+                sprintf(szLeftTemp,"%3.1f",ConvertFtoC(tempvalues_current.leftTemp));
+            }
+            
+            lv_label_set_text_static(ui_LabelTemp1Val,szLeftTemp);
+            lv_label_set_text_static(ui_LabelLeftTemp,szLeftTemp);
         }
 
-        if (tempvalues_previous.rightTemp!=tempvalues_current.rightTemp) {
+        if (tempvalues_previous.rightTemp!=tempvalues_current.rightTemp || tempvalues_current.unitsChanged) {
             //MONITOR.println("UI: Updating Right Temp");
             static char szRightTemp[6];
-            sprintf(szRightTemp,"%3.1f",tempvalues_current.rightTemp);
+            if (systemsettings_current.AlarmUnitF){
+                sprintf(szRightTemp,"%3.1f",tempvalues_current.rightTemp);
+            }else{
+                sprintf(szRightTemp,"%3.1f",ConvertFtoC(tempvalues_current.rightTemp));
+            }
+
             lv_label_set_text_static(ui_LabelTemp2Val,szRightTemp);
             lv_label_set_text_static(ui_LabelRightTemp,szRightTemp);
         }
@@ -904,10 +1021,21 @@ void ui_update_acecon() {
         if (systemsettings_current.TempAveragingEnabled){
             //MONITOR.println("UI: Updating Avg Temp");
             static char szAvgTemp[6];
-            sprintf(szAvgTemp,"%3.1f",tempvalues_current.avgTemp);
-            lv_label_set_text_static(ui_LabelTempAvg,szAvgTemp);
+
+            if (systemsettings_current.AlarmUnitF){
+                sprintf(szAvgTemp,"%3.1f",tempvalues_current.avgTemp);
             }else{
-                lv_label_set_text_static(ui_LabelTempAvg,"Disabled");
+                sprintf(szAvgTemp,"%3.1f",ConvertFtoC(tempvalues_current.avgTemp));
+            }
+
+            lv_label_set_text_static(ui_LabelTempAvg,szAvgTemp);
+
+        }else{
+            lv_label_set_text_static(ui_LabelTempAvg,"Disabled");
+        }
+        
+        if (tempvalues_current.unitsChanged){
+            tempvalues_current.unitsChanged = false;
         }
         
         tempvalues_current.valueChanged = false;
@@ -937,7 +1065,7 @@ void ui_update_acecon() {
         }
 
         
-        if (enginevalues_current.engineStalled){
+        if (enginevalues_current.engineStalled && systemsettings_current.StallMonitorEnabled){
             //MONITOR.println("UI: Adding Engine Stalled State");
             lv_obj_add_state(ui_ImgButtonEngine, LV_STATE_PRESSED);
         } else{
@@ -995,6 +1123,51 @@ void ui_update_acecon() {
 
         doorvalues_current.valueChanged = false;
 
+    }
+
+    if (xbee_signal_strength_changed){
+        redrawFlag = true;
+
+        MONITOR.print("Changing WiFi Icon:");
+
+        if (xbee_signal_strength_current >= XBEE_SIGNALSTRENGTH0){
+            MONITOR.println("0");
+                lv_obj_clear_flag(ui_ImgButtonWiFi0,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi1,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi2,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi3,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi4,LV_OBJ_FLAG_HIDDEN);
+        }else if (xbee_signal_strength_current >= XBEE_SIGNALSTRENGTH1){
+            MONITOR.println("1");
+            lv_obj_add_flag(ui_ImgButtonWiFi0,LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(ui_ImgButtonWiFi1,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi2,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi3,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi4,LV_OBJ_FLAG_HIDDEN);
+        }else if (xbee_signal_strength_current >= XBEE_SIGNALSTRENGTH2){
+            MONITOR.println("2");
+            lv_obj_add_flag(ui_ImgButtonWiFi0,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi1,LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(ui_ImgButtonWiFi2,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi3,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi4,LV_OBJ_FLAG_HIDDEN);
+        }else if (xbee_signal_strength_current >= XBEE_SIGNALSTRENGTH3){
+            MONITOR.println("3");
+            lv_obj_add_flag(ui_ImgButtonWiFi0,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi1,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi2,LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(ui_ImgButtonWiFi3,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi4,LV_OBJ_FLAG_HIDDEN);
+        }else{
+            MONITOR.println("4");
+            lv_obj_add_flag(ui_ImgButtonWiFi0,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi1,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi2,LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui_ImgButtonWiFi3,LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(ui_ImgButtonWiFi4,LV_OBJ_FLAG_HIDDEN);
+        }
+
+        xbee_signal_strength_changed = false;
     }
 
     // Redraw Screen
@@ -1262,6 +1435,461 @@ static void ui_switch_handler(lv_event_t * e)
     }
 }
 
+static void menu_AlarmPower_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_VALUE_CHANGED) {
+        MONITOR.print("Alarm Power Changed To: ");
+        systemsettings_previous.AlarmPower = systemsettings_current.AlarmPower;
+
+        switch(lv_dropdown_get_selected(obj)){
+
+            case 0:
+                MONITOR.println("CarON/CarOFF");
+                systemsettings_current.AlarmPower = PowerOpt::p_CarONCarOFF;
+            break;
+
+            case 1:
+                MONITOR.println("CarON/ManOFF");
+                systemsettings_current.AlarmPower = PowerOpt::p_CarONManOFF;
+            break;
+
+            case 2:
+                MONITOR.println("ManON/ManOFF");
+                systemsettings_current.AlarmPower = PowerOpt::p_ManONManOFF;
+            break;
+
+            case 3:
+                MONITOR.println("NO K9 LEFT BEHIND");
+                systemsettings_current.AlarmPower = PowerOpt::p_NoK9Left;
+            break;
+
+            case 4:
+                MONITOR.println("Always OFF");
+                systemsettings_current.AlarmPower = PowerOpt::p_OFF;
+            break;
+
+            default:
+                MONITOR.println("Error: Unknown Power Option");
+            break;
+
+        }
+       
+    }
+
+}
+
+static void menu_DoorPower_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_VALUE_CHANGED) {
+        MONITOR.print("Door Power Changed To: ");
+        systemsettings_previous.DoorPower = systemsettings_current.DoorPower;
+
+        switch(lv_dropdown_get_selected(obj)){
+
+            case 0:
+                MONITOR.println("CarON/CarOFF");
+                systemsettings_current.DoorPower = PowerOpt::p_CarONCarOFF;
+            break;
+
+            case 1:
+                MONITOR.println("CarON/ManOFF");
+                systemsettings_current.DoorPower = PowerOpt::p_CarONManOFF;
+            break;
+
+            case 2:
+                MONITOR.println("ManON/ManOFF");
+                systemsettings_current.DoorPower = PowerOpt::p_ManONManOFF;
+            break;
+
+            case 3:
+                MONITOR.println("Always OFF");
+                systemsettings_current.DoorPower = PowerOpt::p_OFF;
+            break;
+
+            default:
+                MONITOR.println("Error: Unknown Power Option");
+            break;
+
+        }
+       
+    }
+
+}
+
+static String print_Battery_Voltage_Settings(Batt b){
+    
+    String str;
+
+    switch(systemsettings_current.BatteryVoltage){
+
+        case Batt::b_10:
+            return "10.0V";
+        break;
+
+        case Batt::b_105:
+            return "10.5V";
+        break;
+
+        case Batt::b_11:
+            return "11.0V";
+        break;
+
+        case Batt::b_115:
+            return "11.5V";
+        break;
+
+        case Batt::b_12:
+            return "12.0V";
+        break;
+
+        default:
+            return "";
+        break;
+
+    }
+}
+
+static void menu_BattVoltSetDown_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_CLICKED) {
+        MONITOR.print("Battery Voltage Setting Changed To: ");
+        systemsettings_previous.BatteryVoltage = systemsettings_current.BatteryVoltage;
+
+        switch (systemsettings_current.BatteryVoltage){
+
+            case Batt::b_10:
+                // Minimum Value
+            break;
+
+            case Batt::b_105:
+                MONITOR.println("10.0V");
+                systemsettings_current.BatteryVoltage = Batt::b_10;
+            break;
+
+            case Batt::b_11:
+                MONITOR.println("10.5V");
+                systemsettings_current.BatteryVoltage = Batt::b_105;                
+            break;
+
+            case Batt::b_115:
+                MONITOR.println("11.0V");
+                systemsettings_current.BatteryVoltage = Batt::b_11;
+            break;
+
+            case Batt::b_12:
+                MONITOR.println("11.5V");
+                systemsettings_current.BatteryVoltage = Batt::b_115;
+            break;
+
+        }
+
+        lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
+       
+    }
+
+}
+
+static void menu_BattVoltSetUp_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_CLICKED) {
+        MONITOR.print("Battery Voltage Setting Changed To: ");
+        systemsettings_previous.BatteryVoltage = systemsettings_current.BatteryVoltage;
+
+        switch (systemsettings_current.BatteryVoltage){
+
+            case Batt::b_10:
+                MONITOR.println("10.5V");
+                systemsettings_current.BatteryVoltage = Batt::b_105;
+            break;
+
+            case Batt::b_105:
+                MONITOR.println("11.0V");
+                systemsettings_current.BatteryVoltage = Batt::b_11;
+            break;
+
+            case Batt::b_11:
+                MONITOR.println("11.5V");
+                systemsettings_current.BatteryVoltage = Batt::b_115;                
+            break;
+
+            case Batt::b_115:
+                MONITOR.println("12.0V");
+                systemsettings_current.BatteryVoltage = Batt::b_12;
+            break;
+
+            case Batt::b_12:
+                // Maximum Value
+            break;
+
+        }
+
+        lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
+       
+    }
+
+}
+
+static String print_Alarm_Hot_Set(int index){
+    char sz[16];
+    const int* arr = systemsettings_current.AlarmUnitF?HotTempOpt_F:HotTempOpt_C;
+    snprintf(sz,sizeof(sz),"%d %c",arr[index],systemsettings_current.AlarmUnitF?'F':'C');
+    return sz;
+    
+}
+
+static void menu_AlarmHotSetUp_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_CLICKED) {
+        MONITOR.print("Alarm Hot Set Changed To: ");
+        systemsettings_previous.AlarmHotSetIndex = systemsettings_current.AlarmHotSetIndex;
+
+        if (systemsettings_current.AlarmHotSetIndex == HotTempArraySize-1){
+            MONITOR.println("MAXIMUM VALUE");
+        }else{
+            systemsettings_current.AlarmHotSetIndex++;
+            MONITOR.println(print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex));
+        }
+        lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
+        
+    }
+
+}
+
+static void menu_AlarmHotSetDown_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_CLICKED) {
+        MONITOR.print("Alarm Hot Set Changed To: ");
+        systemsettings_previous.AlarmHotSetIndex = systemsettings_current.AlarmHotSetIndex;
+
+        if (systemsettings_current.AlarmHotSetIndex == 0){
+            // Minimum Value
+        }else{
+            systemsettings_current.AlarmHotSetIndex--;
+            MONITOR.println(print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex));
+        }
+        lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
+        
+    }
+
+}
+
+static String print_Alarm_Cold_Set(int index){
+    char sz[16];
+    const int* arr = systemsettings_current.AlarmUnitF?ColdTempOpt_F:ColdTempOpt_C;
+    snprintf(sz,sizeof(sz),"%d %c",arr[index],systemsettings_current.AlarmUnitF?'F':'C');
+    return sz;
+    
+}
+
+static void menu_AlarmColdSetUp_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_CLICKED) {
+        MONITOR.print("Alarm Cold Set Changed To: ");
+        systemsettings_previous.AlarmColdSetIndex = systemsettings_current.AlarmColdSetIndex;
+
+        if (systemsettings_current.AlarmColdSetIndex == ColdTempArraySize-1){
+            MONITOR.println("MAXIMUM VALUE");
+        }else{
+            systemsettings_current.AlarmColdSetIndex++;
+            MONITOR.println(print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex));
+        }
+        lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
+        
+    }
+
+}
+
+static void menu_AlarmColdSetDown_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_CLICKED) {
+        MONITOR.print("Alarm Cold Set Changed To: ");
+        systemsettings_previous.AlarmColdSetIndex = systemsettings_current.AlarmColdSetIndex;
+
+        if (systemsettings_current.AlarmColdSetIndex == 0){
+            // Minimum Value
+        }else{
+            systemsettings_current.AlarmColdSetIndex--;
+            MONITOR.println(print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex));
+        }
+        if (systemsettings_current.AlarmColdSetIndex==0){
+            lv_label_set_text(ui_LabelAlarmColdSetValue,"OFF");
+        }else{
+            lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
+        }
+        
+        
+    }
+
+}
+
+static void menu_TempUnits_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_VALUE_CHANGED) {
+        MONITOR.print("Temp Units Changed To: ");
+        systemsettings_previous.AlarmUnitF = systemsettings_current.AlarmUnitF;
+
+        switch(lv_dropdown_get_selected(obj)){
+
+            case 0:
+                MONITOR.println("Farenheit");
+                systemsettings_current.AlarmUnitF = true;
+            break;
+
+            case 1:
+                MONITOR.println("Celsius");
+                systemsettings_current.AlarmUnitF = false;
+            break;
+           
+            default:
+                MONITOR.println("Error: Unknown Temp Units");
+            break;
+
+        }
+    
+    lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
+    lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str()); 
+
+    tempvalues_current.unitsChanged = true;
+    ui_update_acecon();
+
+    }
+
+}
+
+static void menu_TempAveraging_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_VALUE_CHANGED) {
+        MONITOR.print("Temp Averaging Changed To: ");
+        systemsettings_previous.TempAveragingEnabled = systemsettings_current.TempAveragingEnabled;
+
+        if (lv_obj_get_state(obj) & LV_STATE_CHECKED){
+            MONITOR.println("True");
+            systemsettings_current.TempAveragingEnabled = true;
+        }else{
+            MONITOR.println("False");
+            systemsettings_current.TempAveragingEnabled = false;
+        }
+            
+    tempvalues_current.unitsChanged = true;
+    ui_update_acecon();
+
+    }
+
+}
+
+static void menu_AutoSnooze_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_VALUE_CHANGED) {
+        MONITOR.print("Auto Snooze Changed To: ");
+        systemsettings_previous.AutoSnoozeEnabled = systemsettings_current.AutoSnoozeEnabled;
+
+        if (lv_obj_get_state(obj) & LV_STATE_CHECKED){
+            MONITOR.println("True");
+            systemsettings_current.AutoSnoozeEnabled = true;
+        }else{
+            MONITOR.println("False");
+            systemsettings_current.AutoSnoozeEnabled= false;
+        }
+ 
+    }
+
+}
+
+static void menu_AuxInput_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_VALUE_CHANGED) {
+        MONITOR.print("Aux Input Changed To: ");
+        systemsettings_previous.AuxInputEnabled = systemsettings_current.AuxInputEnabled;
+
+        if (lv_obj_get_state(obj) & LV_STATE_CHECKED){
+            MONITOR.println("True");
+            systemsettings_current.AuxInputEnabled = true;
+        }else{
+            MONITOR.println("False");
+            systemsettings_current.AuxInputEnabled= false;
+        }
+            
+
+    }
+
+}
+
+static void menu_StallMonitor_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_VALUE_CHANGED) {
+        MONITOR.print("Stall Monitor Enabled Changed To: ");
+        systemsettings_previous.StallMonitorEnabled = systemsettings_current.StallMonitorEnabled;
+
+        if (lv_obj_get_state(obj) & LV_STATE_CHECKED){
+            MONITOR.println("True");
+            systemsettings_current.StallMonitorEnabled = true;
+        }else{
+            MONITOR.println("False");
+            systemsettings_current.StallMonitorEnabled= false;
+        }
+            
+        enginevalues_current.valueChanged = true;
+        ui_update_acecon();
+
+    }
+
+}
+
+static void menu_ExitMenu_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_CLICKED) {
+        MONITOR.println("Exiting Menu");
+
+        MONITOR.println("Saving Settings");
+        save_settings();
+       
+    }
+
+}
+
+void update_menu_settings(){
+
+    lv_dropdown_set_selected(ui_DropdownAlarmPower,(uint16_t)systemsettings_current.AlarmPower);
+    lv_dropdown_set_selected(ui_DropdownDoorPower,(uint16_t)systemsettings_current.DoorPower);
+    lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
+    lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
+    lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
+    systemsettings_current.AlarmUnitF? lv_dropdown_set_selected(ui_DropdownTempUnits,systemsettings_current.AlarmUnitF?0:1) : lv_dropdown_set_selected(ui_DropdownTempUnits,systemsettings_current.AlarmUnitF?0:1);
+    systemsettings_current.AutoSnoozeEnabled? lv_obj_add_state(ui_CheckboxAutoSnooze,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxAutoSnooze,LV_STATE_CHECKED);
+    systemsettings_current.AuxInputEnabled? lv_obj_add_state(ui_CheckboxAuxIn,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxAuxIn,LV_STATE_CHECKED);
+    systemsettings_current.StallMonitorEnabled? lv_obj_add_state(ui_CheckboxStallMonitor,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxStallMonitor,LV_STATE_CHECKED);
+    systemsettings_current.TempAveragingEnabled? lv_obj_add_state(ui_CheckboxTemperatureAveraging,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxTemperatureAveraging,LV_STATE_CHECKED);
+    
+}
+
 void acedata_parse_serialnumber(String str){
     int i;
     for (i =0; i<ACEDATA_VIM_SN_LENGTH;i++){
@@ -1408,17 +2036,63 @@ void check_door_condition(){
 
 }
 
+void check_cell_signal(){
+    
+    if (xbee_cell_connected && (millis() - signal_strength_timer > signal_strength_timer_threshold )){
+        signal_strength_timer = millis();
+        
+        MONITOR.println("Checking Cell Signal");
+        String str = "atdb";
+        MONITOR.println("Sending:" + str);
+        
+        on_monitor_at(str.c_str()); 
+    }
+
+    if (last_at_cmd.commandstr[0] == 'd' && last_at_cmd.commandstr[1] == 'b' && last_at_cmd.value_received){
+        MONITOR.println("Received db Response");
+        if (xbee_signal_strength_current != last_at_cmd.value){
+            xbee_signal_strength_changed = true;
+        }
+        xbee_signal_strength_current = last_at_cmd.value;
+        
+        last_at_cmd.value_received = false;
+
+    }
+
+}
+
 void setup() {
-    SPIFFS.begin(false);
+    
+    SPIFFS.begin(true);
     Wire.begin( 1,42,100*1000); 
     lv_init();
     display_init();
     input_init();
     ui_init();
     vim_init(process_vim);
-    
-   //Wire.begin( 18,8,100*1000);
-    //flood_it();
+
+    //================================================== Menu Events =========================================*/
+    lv_obj_add_event_cb(ui_DropdownAlarmPower, menu_AlarmPower_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_DropdownDoorPower, menu_DoorPower_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonBattVoltSetUp, menu_BattVoltSetUp_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonBattVoltSetDown, menu_BattVoltSetDown_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonHotSetUp, menu_AlarmHotSetUp_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonHotSetDown, menu_AlarmHotSetDown_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonColdSetUp, menu_AlarmColdSetUp_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonColdSetDown, menu_AlarmColdSetDown_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_DropdownTempUnits, menu_TempUnits_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_CheckboxTemperatureAveraging, menu_TempAveraging_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_CheckboxAutoSnooze, menu_AutoSnooze_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_CheckboxAuxIn, menu_AuxInput_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_CheckboxStallMonitor, menu_StallMonitor_handler, LV_EVENT_ALL, NULL);
+
+    lv_obj_add_event_cb(ui_ImgButtonExitMenu1, menu_ExitMenu_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonExitMenu2, menu_ExitMenu_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonExitMenu3, menu_ExitMenu_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonExitMenu4, menu_ExitMenu_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_ImgButtonExitMenu5, menu_ExitMenu_handler, LV_EVENT_ALL, NULL);
+
+    //================================================== ACECON Screen Events =========================================*/
     lv_obj_add_event_cb(ui_SwitchPPT, ui_switch_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_SwitchPPS, ui_switch_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_SwitchALM, ui_switch_handler, LV_EVENT_ALL, NULL);
@@ -1428,7 +2102,7 @@ void setup() {
 #ifndef CUSTOM
     XBEE.begin(115200, SERIAL_8N1, 18, 17);
 #else
-    XBEE.begin(115200, SERIAL_8N1, 4, 5);
+    XBEE.begin(115200, SERIAL_8N1, XBEE_RXD, XBEE_TXD);
 #endif
     MONITOR.begin(115200);
     MONITOR.printf("Booted\n");
@@ -1447,6 +2121,15 @@ void setup() {
         while(1);
     }
 
+    //================================================== XBEE Setup =========================================*/
+    pinMode(XBEE_RSSI,INPUT);
+    pinMode(XBEE_RESET,OUTPUT);
+    pinMode(XBEE_CMD,INPUT);
+    pinMode(XBEE_LINK,INPUT);
+
+    digitalWrite(XBEE_RESET,LOW);
+
+
     //================================================== ACECON Setup =========================================*/
     pinMode(ACECON_PPS_IN,INPUT);
     pinMode(ACECON_IGN_IN,INPUT);
@@ -1463,7 +2146,8 @@ void setup() {
     digitalWrite(ACECON_HPS_OUT,LOW);
       
     //================================================== Set System Defaults =========================================*/
-    systemsettings_default.AlarmPower = p_CarONCarOFF;
+    
+    systemsettings_default.AlarmPower = p_AlwaysOFF;
     systemsettings_default.AutoSnoozeEnabled = false;
     systemsettings_default.AuxInputEnabled = false;
     systemsettings_default.BatteryVoltage = b_12;
@@ -1471,9 +2155,16 @@ void setup() {
     systemsettings_default.StallMonitorEnabled = true;
     systemsettings_default.TempAveragingEnabled = true;
     systemsettings_default.doorDisabled = false;
+    systemsettings_default.AlarmUnitF = true;
+    systemsettings_default.AlarmHotSetIndex = 3;
+    systemsettings_default.AlarmColdSetIndex = 7;
 
+    SettingsLoaded = load_settings();
 
-    systemsettings_current = systemsettings_default;
+    update_menu_settings();
+
+    systemsettings_previous = systemsettings_current;
+
 
     acedata_current.ValueChanged = false;
     tempvalues_current.valueChanged = true;
@@ -1483,20 +2174,23 @@ void setup() {
     set_HPS(HIGH);
     set_PPS(HIGH);
 
-    
+
     MONITOR.printf("Exiting Setup()\n");
 
+    
 }
 
 
 
 void loop() {
 
-    if (last.cmd == COMMAND_ID::ACKNOWLEDGE){
+    //Check XBee 
+    if (last_packet.cmd == COMMAND_ID::ACKNOWLEDGE){
                 
-        if (last.status == STATUS_CODE::XBEE_INITIALIZED){
+        if (last_packet.status == STATUS_CODE::XBEE_INITIALIZED){
             
             if (xbee_initialized){
+                MONITOR.println("====================WARNING=============================");
                 MONITOR.println("XBEE Reset During Operation");
                 xbee_reset = true;
             }
@@ -1504,28 +2198,25 @@ void loop() {
             MONITOR.println("XBEE Initialized");
             xbee_initialized = true;
             
-            last.cmd = (COMMAND_ID)NULL;
-            last.status = (STATUS_CODE)NULL;
+            last_packet.cmd = (COMMAND_ID)NULL;
+            last_packet.status = (STATUS_CODE)NULL;
 
-        }else if (last.status == STATUS_CODE::XBEE_CELL_CONNECTED){
+        }else if (last_packet.status == STATUS_CODE::XBEE_CELL_CONNECTED){
             
             MONITOR.println("XBEE Cell Connected");
              xbee_cell_connected = true;
             
-            // String str = "atdb\r";
-            // on_monitor_at(str.c_str());
+            send_init_packet();
+            
 
-            last.cmd = (COMMAND_ID)NULL;
-            last.status = (STATUS_CODE)NULL;
+            last_packet.cmd = (COMMAND_ID)NULL;
+            last_packet.status = (STATUS_CODE)NULL;
         }
 
 
-
-        
-
     }
 
-    
+    check_cell_signal();
 
     display_update();
     lv_timer_handler();
@@ -1533,18 +2224,14 @@ void loop() {
     monitor_dev_tick(MONITOR);
 
     xbee_dev_tick(&my_xbee);
-    if(((int)last.status)<0) {
-        on_xbee_error(last.cmd, last.status);
+    if(((int)last_packet.status)<0) {
+        on_xbee_error(last_packet.cmd, last_packet.status);
     }
 
     acecon_dev_tick();
     check_door_condition();
 
-
     ui_update_acecon();
-
-    
-
 
 }
 

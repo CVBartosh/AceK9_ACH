@@ -40,18 +40,22 @@ extern lv_obj_t * ui_ImgButtonDoorPopped;
 extern lv_obj_t * ui_ImgButtonDoorDisabled;
 extern lv_obj_t * ui_ImgButtonKey;
 extern lv_obj_t * ui_ImgButtonEngine;
-extern lv_obj_t * ui_ImgButtonWiFi;
+extern lv_obj_t * ui_ImgButtonWiFi0;
+extern lv_obj_t * ui_ImgButtonWiFi1;
+extern lv_obj_t * ui_ImgButtonWiFi2;
+extern lv_obj_t * ui_ImgButtonWiFi3;
+extern lv_obj_t * ui_ImgButtonWiFi4;
 extern lv_obj_t * ui_ImgTempCircle;
 extern lv_obj_t * ui_LabelLeftTemp;
 extern lv_obj_t * ui_LabelRightTemp;
 extern lv_obj_t * ui_LabelTempAvg;
-void ui_event_ImgButton6(lv_event_t * e);
-extern lv_obj_t * ui_ImgButton6;
+void ui_event_ImgButtonEnterMenu1(lv_event_t * e);
+extern lv_obj_t * ui_ImgButtonEnterMenu1;
 // SCREEN: ui_MenuScreen1
 void ui_MenuScreen1_screen_init(void);
 extern lv_obj_t * ui_MenuScreen1;
-void ui_event_ImgButton2(lv_event_t * e);
-extern lv_obj_t * ui_ImgButton2;
+void ui_event_ImgButtonExitMenu1(lv_event_t * e);
+extern lv_obj_t * ui_ImgButtonExitMenu1;
 void ui_event_ImgButton3(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton3;
 void ui_event_ImgButton4(lv_event_t * e);
@@ -72,8 +76,8 @@ extern lv_obj_t * ui_CheckboxAuxIn;
 // SCREEN: ui_MenuScreen2
 void ui_MenuScreen2_screen_init(void);
 extern lv_obj_t * ui_MenuScreen2;
-void ui_event_ImgButton5(lv_event_t * e);
-extern lv_obj_t * ui_ImgButton5;
+void ui_event_ImgButtonExitMenu2(lv_event_t * e);
+extern lv_obj_t * ui_ImgButtonExitMenu2;
 void ui_event_ImgButton8(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton8;
 void ui_event_ImgButton12(lv_event_t * e);
@@ -87,15 +91,15 @@ extern lv_obj_t * ui_LabelAlarmColdSetValue;
 extern lv_obj_t * ui_ImgButtonColdSetDown;
 extern lv_obj_t * ui_ImgButtonColdSetUp;
 extern lv_obj_t * ui_CheckboxTemperatureAveraging;
-extern lv_obj_t * ui_DropdownAlarmPower2;
+extern lv_obj_t * ui_DropdownTempUnits;
 extern lv_obj_t * ui_LabelTempUnits;
 void ui_event_ImgButton13(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton13;
 // SCREEN: ui_MenuScreen3
 void ui_MenuScreen3_screen_init(void);
 extern lv_obj_t * ui_MenuScreen3;
-void ui_event_ImgButton20(lv_event_t * e);
-extern lv_obj_t * ui_ImgButton20;
+void ui_event_ImgButtonExitMenu3(lv_event_t * e);
+extern lv_obj_t * ui_ImgButtonExitMenu3;
 void ui_event_ImgButton21(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton21;
 void ui_event_ImgButton22(lv_event_t * e);
@@ -111,8 +115,8 @@ extern lv_obj_t * ui_LabelControlHeadSNValue1;
 // SCREEN: ui_MenuScreen4
 void ui_MenuScreen4_screen_init(void);
 extern lv_obj_t * ui_MenuScreen4;
-void ui_event_ImgButton15(lv_event_t * e);
-extern lv_obj_t * ui_ImgButton15;
+void ui_event_ImgButtonExitMenu4(lv_event_t * e);
+extern lv_obj_t * ui_ImgButtonExitMenu4;
 void ui_event_ImgButton17(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton17;
 void ui_event_ImgButton18(lv_event_t * e);
@@ -124,8 +128,8 @@ extern lv_obj_t * ui_Label2;
 // SCREEN: ui_MenuScreen5
 void ui_MenuScreen5_screen_init(void);
 extern lv_obj_t * ui_MenuScreen5;
-void ui_event_ImgButton24(lv_event_t * e);
-extern lv_obj_t * ui_ImgButton24;
+void ui_event_ImgButtonExitMenu5(lv_event_t * e);
+extern lv_obj_t * ui_ImgButtonExitMenu5;
 void ui_event_ImgButton25(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton25;
 void ui_event_ImgButton26(lv_event_t * e);
@@ -219,8 +223,11 @@ LV_IMG_DECLARE(ui_img_keyenabledicon_png);    // assets\KeyEnabledIcon.png
 LV_IMG_DECLARE(ui_img_keyicon_png);    // assets\KeyIcon.png
 LV_IMG_DECLARE(ui_img_engineenabledicon_png);    // assets\EngineEnabledIcon.png
 LV_IMG_DECLARE(ui_img_enginedisabledicon_png);    // assets\EngineDisabledIcon.png
-LV_IMG_DECLARE(ui_img_wifienabledicon_png);    // assets\WiFiEnabledIcon.png
-LV_IMG_DECLARE(ui_img_wifidisabledicon_png);    // assets\WiFiDisabledIcon.png
+LV_IMG_DECLARE(ui_img_wifi_0_png);    // assets\WiFi 0.png
+LV_IMG_DECLARE(ui_img_wifi_1_png);    // assets\WiFi 1.png
+LV_IMG_DECLARE(ui_img_wifi_2_png);    // assets\WiFi 2.png
+LV_IMG_DECLARE(ui_img_wifi_3_png);    // assets\WiFi 3.png
+LV_IMG_DECLARE(ui_img_wifi_4_png);    // assets\WiFi 4.png
 LV_IMG_DECLARE(ui_img_greentempcircle_png);    // assets\GreenTempCircle.png
 LV_IMG_DECLARE(ui_img_redtempcircle_png);    // assets\RedTempCircle.png
 LV_IMG_DECLARE(ui_img_arrowrighticon_png);    // assets\ArrowRightIcon.png
