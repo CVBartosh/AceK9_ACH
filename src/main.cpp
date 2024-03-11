@@ -340,7 +340,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         }
         break; 
     }
-
+#ifdef DUMP_PACKETS
     // If all characters of message are printable, just print it as a string
     // with printf().  Otherwise use hex_dump() for non-printable messages.
     int printable = TRUE;
@@ -355,7 +355,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
     } else {
         hex_dump(data->payload, payload_length, HEX_DUMP_FLAG_OFFSET);
     }
-
+#endif
     return 0;
 }
 int dump_tx_status(xbee_dev_t *xbee, const void FAR *frame, uint16_t length, void FAR *context)
@@ -529,7 +529,14 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
         MONITOR.println("(success)");
         return XBEE_ATCMD_DONE;
     }
+    if (length <= 4)
+    {
+        
+        last_at_cmd.value = response->value;
+        last_at_cmd.value_received = true;
 
+    }
+#ifdef DUMP_PACKETS
     // check to see if we can print the value out as a string
     printable = 1;
     p = response->value_bytes;
@@ -548,8 +555,7 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
         MONITOR.printf("= 0x%0*" PRIX32 " (%" PRIu32 ")\n", length * 2, response->value,
                       response->value);
 
-        last_at_cmd.value = response->value;
-        last_at_cmd.value_received = true;
+        
 
     }
     else if (length <= 32)
@@ -564,10 +570,12 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
     }
     else
     {
+
         MONITOR.printf("= %d bytes:\n", length);
+
         hex_dump(response->value_bytes, length, HEX_DUMP_FLAG_TAB);
     }
-
+#endif
     return XBEE_ATCMD_DONE;
 }
 
@@ -680,7 +688,7 @@ void on_monitor_data(const char* str) {
     data.batteryVoltage = 141;
     strcpy(data.doorPopUTC, "2020-09-11T08:02:17:350Z");
     data.version = 2;
-    //data.newstuff = ACE_TRUE;
+    data.newstuff = ACE_TRUE;
 
     uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
     
@@ -867,15 +875,15 @@ void on_monitor_config(const char* str) {
     
 }
 
-void on_monitor_subscribe7(const char* str) {
+void on_monitor_subscribe_config(const char* str) {
     
-    last_packet.cmd = COMMAND_ID::CONFIG;
+    last_packet.cmd = COMMAND_ID::SUBSCRIBE;
 
-    command_packet data;
+    subscribe_packet data;
     memset(&data, 0, sizeof(data));
     strcpy(data.topicName, "config");
-    data.qos = 1;
-    data.retainFlag = ACE_FALSE;
+    strcpy(data.handlerType, "config");
+    
         
     uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
     
@@ -903,15 +911,15 @@ void on_monitor_subscribe7(const char* str) {
     
 }
 
-void on_monitor_subscribe8(const char* str) {
+void on_monitor_subscribe_command(const char* str) {
     
-    last_packet.cmd = COMMAND_ID::COMMAND;
+    last_packet.cmd = COMMAND_ID::SUBSCRIBE;
 
-    command_packet data;
+    subscribe_packet data;
     memset(&data, 0, sizeof(data));
     strcpy(data.topicName, "command");
-    data.qos = 1;
-    data.retainFlag = ACE_FALSE;
+    strcpy(data.handlerType, "command");
+    
         
     uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
     
@@ -963,10 +971,10 @@ void monitor_dev_tick(HardwareSerial& s) {
             on_monitor_connection(str.c_str());
         } else if (cmd=="config"){
             on_monitor_config(str.c_str());
-        } else if (cmd=="subscribe7"){
-            on_monitor_subscribe7(str.c_str()); 
-        } else if (cmd=="subscribe8"){
-            on_monitor_subscribe8(str.c_str());
+        } else if (cmd=="subscribe config"){
+            on_monitor_subscribe_config(str.c_str()); 
+        } else if (cmd=="subscribe command"){
+            on_monitor_subscribe_command(str.c_str());
         } else if (cmd=="save default settings"){
             systemsettings_current = systemsettings_default;    
             save_settings();            

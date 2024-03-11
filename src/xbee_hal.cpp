@@ -115,8 +115,9 @@ int xbee_ser_write( xbee_serial_t *serial, const void FAR *buffer,int length)
     
     int result;
     const char* buf = (const char*)buffer;
+#ifdef DUMP_PACKETS
     dump_hex(buffer,length,16);
-    
+#endif
     ((HardwareSerial*)serial->ser)->write((char*)buffer,length);
    // USBSerial.write((char*)buffer,length);
 

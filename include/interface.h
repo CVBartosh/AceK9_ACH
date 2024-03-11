@@ -1,5 +1,5 @@
 // PlatformIO CLI command line for regenerating:
-// ./h2csv include/interface.h /header /output init_csv.h
+// ./h2csv include/interface.h /header /output include/init_csv.h
 
 // XBee - ESP32 Interface Protocol
 // Rev 00.00.01
@@ -32,6 +32,7 @@ enum struct COMMAND_ID : int32_t {
     CONNECTION,
     CONFIG,
     COMMAND,
+    SUBSCRIBE,
     INIT = 255
 };
 enum ACE_BOOL : uint32_t {
@@ -55,6 +56,15 @@ struct connect_packet
     char lastWillMessage[128];                  // lastWillMessage | 128 bytes | string padded by zeros | Last Will Message
     ACE_BOOL lastWillRetain;                    // lastWillRetain | ACE_BOOL 32-bit unsigned word | 0 = False, Non-Zero = True
     ACE_BOOL cleanSession;                      // cleanSession | ACE_BOOL 32-bit unsigned word | 0 = False, Non-Zero = True
+};
+
+struct subscribe_packet
+{
+    constexpr static const COMMAND_ID cmd_ID = COMMAND_ID::SUBSCRIBE;
+    // uint32_t crc; (prepended to packet)      // CRC | 4 bytes | 32-bit unsigned word  | Indicates the CRC-32 value for the packet
+    char topicName[128];                        // topicName | 128 bytes | string padded by zeros | topicName to subscribe to
+    char handlerType[128];                      // handlerType | 128 bytes | string padded by zeros | Currently can be "command" or "config"
+    
 };
 
 
@@ -86,7 +96,7 @@ struct data_packet
     uint32_t batteryVoltage;                    //  batteryVoltage | 4 bytes | 32-bit unsigned word | 
     char doorPopUTC[32];                        //  doorPopUTC | 32 bytes | string padded by zeros |
     uint32_t version;                           //  version | 4 bytes | 32-bit unsigned word | 
-    //ACE_BOOL newstuff;
+    ACE_BOOL newstuff;
 
 };
 
