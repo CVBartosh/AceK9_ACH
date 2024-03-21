@@ -103,8 +103,8 @@ lv_obj_t * ui_LabelControlHeadSN;
 lv_obj_t * ui_LabelControlHeadSNValue;
 void ui_event_ImgButton23(lv_event_t * e);
 lv_obj_t * ui_ImgButton23;
-lv_obj_t * ui_Button2;
-lv_obj_t * ui_LabelControlHeadSNValue1;
+lv_obj_t * ui_BTNRestoreDefaults;
+lv_obj_t * ui_LabelRestoreDefaults;
 
 
 // SCREEN: ui_MenuScreen4
@@ -118,8 +118,8 @@ void ui_event_ImgButton18(lv_event_t * e);
 lv_obj_t * ui_ImgButton18;
 void ui_event_ImgButton19(lv_event_t * e);
 lv_obj_t * ui_ImgButton19;
-lv_obj_t * ui_ButtonAutoTest;
-lv_obj_t * ui_Label2;
+lv_obj_t * ui_BtnAutoTest;
+lv_obj_t * ui_LabelBeginAutoTest;
 
 
 // SCREEN: ui_MenuScreen5

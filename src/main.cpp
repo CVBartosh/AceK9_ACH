@@ -95,10 +95,6 @@ struct DoorValues{
 DoorValues doorvalues_current;
 DoorValues doorvalues_previous;
 
-//================================================== VIM Variables =========================================*/
-String VIMSerialNumber;
-
-
 //================================================== GLOBAL VARIABLES =========================================*/
 
 struct last_packet_info {
@@ -172,6 +168,7 @@ struct SystemSettings{
     PowerOpt AlarmPower;
     PowerOpt DoorPower;
     Batt BatteryVoltage;
+    String VIMSerialNumber;
 
 };
 
@@ -905,7 +902,7 @@ void on_monitor_subscribe_config(const char* str) {
     }
     else 
     {
-        
+        MONITOR.println("Subscribed to config topic");
     }
 
     
@@ -941,12 +938,11 @@ void on_monitor_subscribe_command(const char* str) {
     }
     else 
     {
-        
+        MONITOR.println("Subscribed to command topic");
     }
 
     
 }
-
 
 void monitor_dev_tick(HardwareSerial& s) {
     if(s.available()) {
@@ -1898,12 +1894,32 @@ void update_menu_settings(){
     
 }
 
-void acedata_parse_serialnumber(String str){
-    int i;
-    for (i =0; i<ACEDATA_VIM_SN_LENGTH;i++){
-        VIMSerialNumber[i]=str.charAt(ACEDATA_VIM_SN_POS+i);
+static void menu_RestoreDefaults_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_CLICKED) {
+        MONITOR.println("Restoring Default Values");
+
+        systemsettings_previous = systemsettings_current;
+        systemsettings_current = systemsettings_default;
+
+        update_menu_settings();
+       
     }
-    VIMSerialNumber[i]=0;
+
+}
+
+void acedata_parse_serialnumber(String str){
+        
+    systemsettings_current.VIMSerialNumber = str.substring(ACEDATA_VIM_SN_POS,ACEDATA_VIM_SN_POS+ACEDATA_VIM_SN_LENGTH);
+
+        //MONITOR.println("VIM SN:" + systemsettings_current.VIMSerialNumber);
+    if (systemsettings_previous.VIMSerialNumber != systemsettings_current.VIMSerialNumber){
+        systemsettings_previous.VIMSerialNumber = systemsettings_current.VIMSerialNumber;
+        //MONITOR.println("VIM SN Changed:");
+        lv_label_set_text(ui_LabelIntelaBoxSNValue,systemsettings_current.VIMSerialNumber.c_str());
+    }
 
 }
 
@@ -2093,6 +2109,7 @@ void setup() {
     lv_obj_add_event_cb(ui_CheckboxAutoSnooze, menu_AutoSnooze_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_CheckboxAuxIn, menu_AuxInput_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_CheckboxStallMonitor, menu_StallMonitor_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_BTNRestoreDefaults, menu_RestoreDefaults_handler, LV_EVENT_ALL, NULL);
 
     lv_obj_add_event_cb(ui_ImgButtonExitMenu1, menu_ExitMenu_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButtonExitMenu2, menu_ExitMenu_handler, LV_EVENT_ALL, NULL);
@@ -2215,7 +2232,10 @@ void loop() {
              xbee_cell_connected = true;
             
             send_init_packet();
-            
+            String blank;
+            // on_monitor_connect(blank.c_str());
+            // on_monitor_subscribe_command(blank.c_str());
+            // on_monitor_subscribe_config(blank.c_str());
 
             last_packet.cmd = (COMMAND_ID)NULL;
             last_packet.status = (STATUS_CODE)NULL;
@@ -2240,6 +2260,12 @@ void loop() {
     check_door_condition();
 
     ui_update_acecon();
+
+
+    
+
+
+
 
 }
 
