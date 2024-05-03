@@ -105,16 +105,16 @@ void ui_MenuScreen3_screen_init(void)
     lv_obj_add_flag(ui_BTNRestoreDefaults, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
     lv_obj_clear_flag(ui_BTNRestoreDefaults, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
-    ui_LabelRestoreDefaults = lv_label_create(ui_MenuScreen3);
-    lv_obj_set_width(ui_LabelRestoreDefaults, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_LabelRestoreDefaults, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_LabelRestoreDefaults, 0);
-    lv_obj_set_y(ui_LabelRestoreDefaults, 46);
-    lv_obj_set_align(ui_LabelRestoreDefaults, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_LabelRestoreDefaults, "Restore Default Settings");
-    lv_obj_set_style_text_color(ui_LabelRestoreDefaults, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(ui_LabelRestoreDefaults, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_LabelRestoreDefaults, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_LabelControlHeadSNValue1 = lv_label_create(ui_MenuScreen3);
+    lv_obj_set_width(ui_LabelControlHeadSNValue1, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_LabelControlHeadSNValue1, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_LabelControlHeadSNValue1, 0);
+    lv_obj_set_y(ui_LabelControlHeadSNValue1, 46);
+    lv_obj_set_align(ui_LabelControlHeadSNValue1, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_LabelControlHeadSNValue1, "Restore Default Settings");
+    lv_obj_set_style_text_color(ui_LabelControlHeadSNValue1, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_LabelControlHeadSNValue1, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_LabelControlHeadSNValue1, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_add_event_cb(ui_ImgButtonExitMenu3, ui_event_ImgButtonExitMenu3, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton21, ui_event_ImgButton21, LV_EVENT_ALL, NULL);

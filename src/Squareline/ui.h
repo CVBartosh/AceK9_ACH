@@ -111,7 +111,7 @@ extern lv_obj_t * ui_LabelControlHeadSNValue;
 void ui_event_ImgButton23(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton23;
 extern lv_obj_t * ui_BTNRestoreDefaults;
-extern lv_obj_t * ui_LabelRestoreDefaults;
+extern lv_obj_t * ui_LabelControlHeadSNValue1;
 // SCREEN: ui_MenuScreen4
 void ui_MenuScreen4_screen_init(void);
 extern lv_obj_t * ui_MenuScreen4;
@@ -123,8 +123,8 @@ void ui_event_ImgButton18(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton18;
 void ui_event_ImgButton19(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton19;
-extern lv_obj_t * ui_BtnAutoTest;
-extern lv_obj_t * ui_LabelBeginAutoTest;
+extern lv_obj_t * ui_ButtonAutoTest;
+extern lv_obj_t * ui_Label2;
 // SCREEN: ui_MenuScreen5
 void ui_MenuScreen5_screen_init(void);
 extern lv_obj_t * ui_MenuScreen5;
@@ -208,6 +208,30 @@ extern lv_obj_t * ui_LabelRXData;
 extern lv_obj_t * ui_TextAreaRXData;
 void ui_event_ImgButton11(lv_event_t * e);
 extern lv_obj_t * ui_ImgButton11;
+// SCREEN: ui_PowerOffScreen
+void ui_PowerOffScreen_screen_init(void);
+extern lv_obj_t * ui_PowerOffScreen;
+extern lv_obj_t * ui_PowerOffTextArea;
+// SCREEN: ui_PowerAppliedScreen
+void ui_PowerAppliedScreen_screen_init(void);
+extern lv_obj_t * ui_PowerAppliedScreen;
+extern lv_obj_t * ui_PowerAppliedTextArea;
+// SCREEN: ui_MenuHelpScreen
+void ui_MenuHelpScreen_screen_init(void);
+extern lv_obj_t * ui_MenuHelpScreen;
+extern lv_obj_t * ui_MenuHelpTextArea;
+// SCREEN: ui_PowerDownScreen
+void ui_PowerDownScreen_screen_init(void);
+extern lv_obj_t * ui_PowerDownScreen;
+extern lv_obj_t * ui_PowerDownTextArea;
+// SCREEN: ui_SleepScreen
+void ui_SleepScreen_screen_init(void);
+extern lv_obj_t * ui_SleepScreen;
+extern lv_obj_t * ui_SleepTextArea;
+// SCREEN: ui_NoK9Screen
+void ui_NoK9Screen_screen_init(void);
+extern lv_obj_t * ui_NoK9Screen;
+extern lv_obj_t * ui_NoK9TextArea;
 extern lv_obj_t * ui____initial_actions0;
 
 LV_IMG_DECLARE(ui_img_acek9logo_png);    // assets\ACEK9Logo.png

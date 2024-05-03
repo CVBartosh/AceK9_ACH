@@ -104,7 +104,7 @@ lv_obj_t * ui_LabelControlHeadSNValue;
 void ui_event_ImgButton23(lv_event_t * e);
 lv_obj_t * ui_ImgButton23;
 lv_obj_t * ui_BTNRestoreDefaults;
-lv_obj_t * ui_LabelRestoreDefaults;
+lv_obj_t * ui_LabelControlHeadSNValue1;
 
 
 // SCREEN: ui_MenuScreen4
@@ -118,8 +118,8 @@ void ui_event_ImgButton18(lv_event_t * e);
 lv_obj_t * ui_ImgButton18;
 void ui_event_ImgButton19(lv_event_t * e);
 lv_obj_t * ui_ImgButton19;
-lv_obj_t * ui_BtnAutoTest;
-lv_obj_t * ui_LabelBeginAutoTest;
+lv_obj_t * ui_ButtonAutoTest;
+lv_obj_t * ui_Label2;
 
 
 // SCREEN: ui_MenuScreen5
@@ -211,6 +211,42 @@ lv_obj_t * ui_LabelRXData;
 lv_obj_t * ui_TextAreaRXData;
 void ui_event_ImgButton11(lv_event_t * e);
 lv_obj_t * ui_ImgButton11;
+
+
+// SCREEN: ui_PowerOffScreen
+void ui_PowerOffScreen_screen_init(void);
+lv_obj_t * ui_PowerOffScreen;
+lv_obj_t * ui_PowerOffTextArea;
+
+
+// SCREEN: ui_PowerAppliedScreen
+void ui_PowerAppliedScreen_screen_init(void);
+lv_obj_t * ui_PowerAppliedScreen;
+lv_obj_t * ui_PowerAppliedTextArea;
+
+
+// SCREEN: ui_MenuHelpScreen
+void ui_MenuHelpScreen_screen_init(void);
+lv_obj_t * ui_MenuHelpScreen;
+lv_obj_t * ui_MenuHelpTextArea;
+
+
+// SCREEN: ui_PowerDownScreen
+void ui_PowerDownScreen_screen_init(void);
+lv_obj_t * ui_PowerDownScreen;
+lv_obj_t * ui_PowerDownTextArea;
+
+
+// SCREEN: ui_SleepScreen
+void ui_SleepScreen_screen_init(void);
+lv_obj_t * ui_SleepScreen;
+lv_obj_t * ui_SleepTextArea;
+
+
+// SCREEN: ui_NoK9Screen
+void ui_NoK9Screen_screen_init(void);
+lv_obj_t * ui_NoK9Screen;
+lv_obj_t * ui_NoK9TextArea;
 lv_obj_t * ui____initial_actions0;
 const lv_img_dsc_t * ui_imgset_wifi_[5] = {&ui_img_wifi_0_png, &ui_img_wifi_1_png, &ui_img_wifi_2_png, &ui_img_wifi_3_png, &ui_img_wifi_4_png};
 
@@ -460,6 +496,12 @@ void ui_init(void)
     ui_ACECONScreen_screen_init();
     ui_ACEDATAScreen_screen_init();
     ui_SerialCOMsScreen_screen_init();
+    ui_PowerOffScreen_screen_init();
+    ui_PowerAppliedScreen_screen_init();
+    ui_MenuHelpScreen_screen_init();
+    ui_PowerDownScreen_screen_init();
+    ui_SleepScreen_screen_init();
+    ui_NoK9Screen_screen_init();
     ui____initial_actions0 = lv_obj_create(NULL);
     lv_disp_load_scr(ui_SplashScreen);
 }

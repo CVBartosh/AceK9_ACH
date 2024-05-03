@@ -44,23 +44,23 @@ void ui_MenuScreen4_screen_init(void)
     lv_obj_set_y(ui_ImgButton19, -98);
     lv_obj_set_align(ui_ImgButton19, LV_ALIGN_CENTER);
 
-    ui_BtnAutoTest = lv_btn_create(ui_MenuScreen4);
-    lv_obj_set_width(ui_BtnAutoTest, 175);
-    lv_obj_set_height(ui_BtnAutoTest, 39);
-    lv_obj_set_align(ui_BtnAutoTest, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_BtnAutoTest, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
-    lv_obj_clear_flag(ui_BtnAutoTest, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_bg_color(ui_BtnAutoTest, lv_color_hex(0xCACA05), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_BtnAutoTest, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_ButtonAutoTest = lv_btn_create(ui_MenuScreen4);
+    lv_obj_set_width(ui_ButtonAutoTest, 175);
+    lv_obj_set_height(ui_ButtonAutoTest, 39);
+    lv_obj_set_align(ui_ButtonAutoTest, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_ButtonAutoTest, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
+    lv_obj_clear_flag(ui_ButtonAutoTest, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_color(ui_ButtonAutoTest, lv_color_hex(0xCACA05), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_ButtonAutoTest, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_LabelBeginAutoTest = lv_label_create(ui_MenuScreen4);
-    lv_obj_set_width(ui_LabelBeginAutoTest, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_LabelBeginAutoTest, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_align(ui_LabelBeginAutoTest, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_LabelBeginAutoTest, "Begin Auto Test");
-    lv_obj_set_style_text_color(ui_LabelBeginAutoTest, lv_color_hex(0xCA0C0C), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(ui_LabelBeginAutoTest, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_LabelBeginAutoTest, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_Label2 = lv_label_create(ui_MenuScreen4);
+    lv_obj_set_width(ui_Label2, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_Label2, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_align(ui_Label2, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_Label2, "Begin Auto Test");
+    lv_obj_set_style_text_color(ui_Label2, lv_color_hex(0xCA0C0C), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_Label2, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_Label2, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_add_event_cb(ui_ImgButtonExitMenu4, ui_event_ImgButtonExitMenu4, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButton17, ui_event_ImgButton17, LV_EVENT_ALL, NULL);

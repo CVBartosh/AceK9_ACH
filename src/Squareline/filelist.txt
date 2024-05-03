@@ -8,6 +8,12 @@ screens/ui_MenuScreen5.c
 screens/ui_ACECONScreen.c
 screens/ui_ACEDATAScreen.c
 screens/ui_SerialCOMsScreen.c
+screens/ui_PowerOffScreen.c
+screens/ui_PowerAppliedScreen.c
+screens/ui_MenuHelpScreen.c
+screens/ui_PowerDownScreen.c
+screens/ui_SleepScreen.c
+screens/ui_NoK9Screen.c
 ui.c
 components/ui_comp_hook.c
 ui_helpers.c
