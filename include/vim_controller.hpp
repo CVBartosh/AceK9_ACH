@@ -1,7 +1,70 @@
 #include <Arduino.h>
 /// @brief vim_data: the VIM information goes here
+
+enum TempState {tst_OK,tst_Warning,tst_Over, tst_OverPlus,tst_Under};
+enum BatteryThreshold {B_100=100,B_105=105,B_110=110,B_115=115,B_120=120};
+enum IgnEdge{it_None,it_Falling,it_Rising};
+
 struct vim_data {
-    int dummy;
+    // System Settings
+    char VIMSerialNumber[24];
+
+    // ACEDATA Variables
+    bool Comms_OK;
+    bool acedata_changed;
+
+    // Door Variables
+    bool k9_door_open_previous;
+    bool k9_door_open_current;
+    bool k9_door_changed;
+    bool k9_door_popped;
+
+    // Temperature Variables
+    bool tempvalues_previous;
+    bool tempvalues_current;
+    float leftTemp_current;
+    float leftTemp_previous;
+    bool leftTempError;
+    char leftTempSign;
+    TempState leftTempState;
+    float rightTemp_current;
+    float rightTemp_previous;
+    bool rightTempError;
+    char rightTempSign;
+    TempState rightTempState;
+    float avgTemp;
+    bool temp_changed;
+    bool units_changed;
+	bool temp_alarmFlag;
+	bool temp_errorFlag;
+
+    // Battery Variables
+    BatteryThreshold BatterySetting = BatteryThreshold::B_100;
+    float voltage;
+    int BadBatteryCounter=0;
+    bool batt_error_previous;
+    bool batt_error_current;
+    bool battchanged;
+
+    // Engine Variables
+    bool engineStallSensorPresent;
+    int enginestallcount;
+    bool engineStalled_previous;
+    bool engineStalled_current;
+    bool ignitionOn_current;
+    bool ignitionOn_previous;
+	IgnEdge ignitionEdge_current;
+    IgnEdge ignitionEdge_previous;
+    bool inGear;
+    bool engine_changed;
+
+    // Aux Variables
+    bool Aux1Input_previous;
+    bool Aux1Input_current;
+    bool Aux2Input_previous;
+    bool Aux2Input_current;
+    bool aux_changed;
+
 };
 /// @brief The VIM callback. Your function should follow this signature
 typedef void(*vim_on_receive_cb)(const char* data, void* state);
