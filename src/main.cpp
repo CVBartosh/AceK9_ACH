@@ -137,7 +137,7 @@ bool UpdateDoorFlag = false;
 #define PARKED	1
 
 vim_data data_global;
-bool watching = false;
+
 
 
 //================================================== XBEE STUFF =========================================*/
@@ -250,6 +250,8 @@ FOTACode PreviousFOTACodeRX;
 
 enum PowerOnTrigger {NoTrigger,Applied,PowerButtonPress,IgnitionOn};
 
+PowerOnTrigger CurrentPowerOnTrigger;
+
 enum StateID {ID_A0_Off,ID_A1_PowerApplied, ID_A3_IgnitionOn,
 			  ID_B1_MenuHelp,
               ID_C1_HA_DP,ID_C2_HA_ONLY,ID_C3_DP_ONLY,
@@ -261,7 +263,7 @@ enum StateID {ID_A0_Off,ID_A1_PowerApplied, ID_A3_IgnitionOn,
 struct SystemState{
     StateID Index;
     String Name;
-    PowerOnTrigger PowerTrigger;
+    //PowerOnTrigger PowerTrigger;
 
 };
 
@@ -745,8 +747,8 @@ void Set_Next_State(SystemState nextstate)
 
 		StoredNextState = nextstate;
 		
-        //MONITOR.println("Next System State: " + D11_UpdatingFirmware_State.Name);
-		//MONITOR.println("Stored Next System State: " + StoredNextState.Name);
+        MONITOR.println("Next System State: " + D11_UpdatingFirmware_State.Name);
+		MONITOR.println("Stored Next System State: " + StoredNextState.Name);
 
         
 		systemstate_previous = systemstate_current;
@@ -756,7 +758,7 @@ void Set_Next_State(SystemState nextstate)
 	}
 	else
 	{
-		//MONITOR.println("Next System State: " + nextstate.Name);
+		MONITOR.println("Next System State: " + nextstate.Name);
 		systemstate_previous = systemstate_current;
 		systemstate_current = nextstate;
 	}
@@ -765,10 +767,77 @@ void Set_Next_State(SystemState nextstate)
 
 SystemState Determine_Next_State()
 {
-	
-	if (systemstate_current.PowerTrigger == PowerOnTrigger::Applied ||
-		systemstate_current.PowerTrigger == PowerOnTrigger::PowerButtonPress)
+	MONITOR.println("Determine Next State");
+	MONITOR.printf("IngitionOn:  %s\r\n",data_global.ignitionOn_current?"TRUE":"FALSE");
+	switch (systemsettings_current.DoorPower)
 	{
+	case DoorOpt::d_CarONCarOFF:
+		MONITOR.println("Door Power: CarOnCarOFF");
+		break;
+	case DoorOpt::d_CarONManOFF :
+		MONITOR.println("Door Power: CarOnManOFF");
+		break;
+	case DoorOpt::d_ManONManOFF:
+		MONITOR.println("Door Power: ManOnManOFF");
+		break;
+	case DoorOpt::d_OFF:
+		MONITOR.println("Door Power: OFF");
+		break;
+	
+	default:
+		MONITOR.println("Door Power: Unknown");
+		break;
+	}			
+	switch (systemsettings_current.AlarmPower)
+	{
+	case PowerOpt::p_CarONCarOFF:
+		MONITOR.println("Alarm Power: CarOnCarOFF");
+		break;
+	case PowerOpt::p_CarONManOFF:
+		MONITOR.println("Alarm Power: CarOnManOFF");
+		break;
+	case PowerOpt::p_ManONManOFF:
+		MONITOR.println("Alarm Power: ManOnManOFF");
+		break;
+	case PowerOpt::p_OFF:
+		MONITOR.println("Alarm Power: OFF");
+		break;
+	case PowerOpt::p_NoK9Left:
+		MONITOR.println("Alarm Power: No K9");
+		break;
+	
+	default:
+		MONITOR.println("Alarm Power: Unknown");
+		break;
+	}		
+
+
+
+	switch (CurrentPowerOnTrigger)
+	{
+	case PowerOnTrigger::NoTrigger:
+		MONITOR.println("PowerOnTrigger: No Trigger");
+		break;
+	case PowerOnTrigger::IgnitionOn:
+		MONITOR.println("PowerOnTrigger: Ignition On");
+		break;
+	case PowerOnTrigger::Applied:
+		MONITOR.println("PowerOnTrigger: Applied");
+		break;
+	case PowerOnTrigger::PowerButtonPress:
+		MONITOR.println("PowerOnTrigger: Power Button Press");
+		break;
+	
+	default:
+		MONITOR.println("PowerOnTrigger: Unknown");
+		break;
+	}			
+	
+
+	if (CurrentPowerOnTrigger == PowerOnTrigger::Applied ||
+		CurrentPowerOnTrigger == PowerOnTrigger::PowerButtonPress)
+	{
+		MONITOR.println("Power Trigger: Applied");
 		// Ignition OFF
 		if (data_global.ignitionOn_current == false)
 		{
@@ -954,8 +1023,9 @@ SystemState Determine_Next_State()
 		}
 
 	}
-	else if (systemstate_current.PowerTrigger == PowerOnTrigger::IgnitionOn)
+	else if (CurrentPowerOnTrigger == PowerOnTrigger::IgnitionOn)
 	{
+		MONITOR.println("Power Trigger: Ignition On");
 		// Door Popper Settings
 		if (systemsettings_current.DoorPower == DoorOpt::d_OFF)
 		{
@@ -1033,6 +1103,8 @@ SystemState Determine_Next_State()
 
 		}
 	}
+
+	MONITOR.println("WTF?");
 
 return (E3_Unknown_State);
 }
@@ -2306,8 +2378,8 @@ void ui_update_acecon() {
                 sprintf(szLeftTemp,"%3.1f",ConvertFtoC(data_global.leftTemp_current));
             }
             
-            //lv_label_set_text(ui_LabelTemp1Val,szLeftTemp);
-            //lv_label_set_text(ui_LabelLeftTemp,szLeftTemp);
+            lv_label_set_text(ui_LabelTemp1Val,szLeftTemp);
+            lv_label_set_text(ui_LabelLeftTemp,szLeftTemp);
         }
 
         if (data_global.rightTemp_previous!=data_global.rightTemp_current || data_global.units_changed) {
@@ -2319,8 +2391,8 @@ void ui_update_acecon() {
                 sprintf(szRightTemp,"%3.1f",ConvertFtoC(data_global.rightTemp_current));
             }
 
-            //lv_label_set_text(ui_LabelTemp2Val,szRightTemp);
-            //lv_label_set_text(ui_LabelRightTemp,szRightTemp);
+            lv_label_set_text(ui_LabelTemp2Val,szRightTemp);
+            lv_label_set_text(ui_LabelRightTemp,szRightTemp);
         }
 
         if (systemsettings_current.TempAveragingEnabled){
@@ -2332,10 +2404,10 @@ void ui_update_acecon() {
             }else{
                 sprintf(szAvgTemp,"%3.1f",ConvertFtoC(data_global.avgTemp));
             }
-            //lv_label_set_text(ui_LabelTempAvg,szAvgTemp);
+            lv_label_set_text(ui_LabelTempAvg,szAvgTemp);
 
         }else{
-            //lv_label_set_text(ui_LabelTempAvg,"Disabled");
+            lv_label_set_text(ui_LabelTempAvg,"Disabled");
         }
         
         if (data_global.units_changed){
@@ -2896,7 +2968,7 @@ static void menu_BattVoltSetDown_handler(lv_event_t * e)
 
         }
 
-        //lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
+        lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
        
     }
 
@@ -2938,7 +3010,7 @@ static void menu_BattVoltSetUp_handler(lv_event_t * e)
 
         }
 
-        //lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
+        lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
        
     }
 
@@ -2966,7 +3038,7 @@ static void menu_AlarmHotSetUp_handler(lv_event_t * e)
             systemsettings_current.AlarmHotSetIndex++;
             //MONITOR.println(print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex));
         }
-        //lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
+        lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
         
     }
 
@@ -2986,7 +3058,7 @@ static void menu_AlarmHotSetDown_handler(lv_event_t * e)
             systemsettings_current.AlarmHotSetIndex--;
             //MONITOR.println(print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex));
         }
-        //lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
+        lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
         
     }
 
@@ -3014,7 +3086,7 @@ static void menu_AlarmColdSetUp_handler(lv_event_t * e)
             systemsettings_current.AlarmColdSetIndex++;
             //MONITOR.println(print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex));
         }
-        //lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
+        lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
         
     }
 
@@ -3035,9 +3107,9 @@ static void menu_AlarmColdSetDown_handler(lv_event_t * e)
             //MONITOR.println(print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex));
         }
         if (systemsettings_current.AlarmColdSetIndex==0){
-            //lv_label_set_text(ui_LabelAlarmColdSetValue,"OFF");
+            lv_label_set_text(ui_LabelAlarmColdSetValue,"OFF");
         }else{
-            //lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
+            lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
         }
         
         
@@ -3072,8 +3144,8 @@ static void menu_TempUnits_handler(lv_event_t * e)
 
         }
     
-    //lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
-    //lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str()); 
+    lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
+    lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str()); 
 
     data_global.units_changed = true;
 
@@ -3190,9 +3262,9 @@ void update_menu_settings(){
 
     lv_dropdown_set_selected(ui_DropdownAlarmPower,(uint16_t)systemsettings_current.AlarmPower);
     lv_dropdown_set_selected(ui_DropdownDoorPower,(uint16_t)systemsettings_current.DoorPower);
-    //lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
-    //lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
-    //lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
+    lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
+    lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
+    lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
     systemsettings_current.AlarmUnitF? lv_dropdown_set_selected(ui_DropdownTempUnits,systemsettings_current.AlarmUnitF?0:1) : lv_dropdown_set_selected(ui_DropdownTempUnits,systemsettings_current.AlarmUnitF?0:1);
     systemsettings_current.AutoSnoozeEnabled? lv_obj_add_state(ui_CheckboxAutoSnooze,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxAutoSnooze,LV_STATE_CHECKED);
     systemsettings_current.AuxInputEnabled? lv_obj_add_state(ui_CheckboxAuxIn,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxAuxIn,LV_STATE_CHECKED);
@@ -3225,7 +3297,7 @@ void acedata_parse_serialnumber(String str){
     // if (systemsettings_previous.VIMSerialNumber != systemsettings_current.VIMSerialNumber){
     //     systemsettings_previous.VIMSerialNumber = systemsettings_current.VIMSerialNumber;
     //     ////MONITOR.println("VIM SN Changed:");
-    //     //lv_label_set_text(ui_LabelIntelaBoxSNValue,systemsettings_current.VIMSerialNumber.c_str());
+    //     lv_label_set_text(ui_LabelIntelaBoxSNValue,systemsettings_current.VIMSerialNumber.c_str());
     // }
 
 }
@@ -3765,7 +3837,7 @@ void Process_State_Machine(){
 			// Draw Initial Screen Details
 			lv_scr_load(ui_PowerOffScreen);
 			//MONITOR.println("Screen Loaded");
-			//lv_label_set_text(ui_PowerOffTextArea,"A0 Power Off State");
+			lv_textarea_set_text(ui_PowerOffTextArea,"A0 Power Off State");
 			//MONITOR.println("Text Loaded");
 
 			// Start Update Timer
@@ -3810,11 +3882,11 @@ void Process_State_Machine(){
 			MONITOR.println("Entered State: A1_PowerApplied_State");
 
 			// Store Power On Trigger
-			A1_PowerApplied_State.PowerTrigger = PowerOnTrigger::Applied;
+			CurrentPowerOnTrigger = PowerOnTrigger::Applied;
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerAppliedScreen);
-			//lv_label_set_text(ui_PowerAppliedTextArea,"A1 Power Applied State");
+			lv_textarea_set_text(ui_PowerAppliedTextArea,"A1 Power Applied State");
 
 
 			// =================== Sound ======================== 
@@ -3849,7 +3921,48 @@ void Process_State_Machine(){
 
 				// ================== Transitions =======================
 
+
+					switch (CurrentPowerOnTrigger)
+					{
+					case PowerOnTrigger::NoTrigger:
+						MONITOR.println("===== PowerOnTrigger: No Trigger");
+						break;
+					case PowerOnTrigger::IgnitionOn:
+						MONITOR.println("===== PowerOnTrigger: Ignition On");
+						break;
+					case PowerOnTrigger::Applied:
+						MONITOR.println("===== PowerOnTrigger: Applied");
+						break;
+					case PowerOnTrigger::PowerButtonPress:
+						MONITOR.println("===== PowerOnTrigger: Power Button Press");
+						break;
+					
+					default:
+						MONITOR.println("===== PowerOnTrigger: Unknown");
+						break;
+					}		
+
 				Set_Next_State(B1_MenuHelp_State);
+
+				switch (CurrentPowerOnTrigger)
+					{
+					case PowerOnTrigger::NoTrigger:
+						MONITOR.println("===== PowerOnTrigger: No Trigger");
+						break;
+					case PowerOnTrigger::IgnitionOn:
+						MONITOR.println("===== PowerOnTrigger: Ignition On");
+						break;
+					case PowerOnTrigger::Applied:
+						MONITOR.println("===== PowerOnTrigger: Applied");
+						break;
+					case PowerOnTrigger::PowerButtonPress:
+						MONITOR.println("===== PowerOnTrigger: Power Button Press");
+						break;
+					
+					default:
+						MONITOR.println("===== PowerOnTrigger: Unknown");
+						break;
+					}	
 
 			}
 
@@ -3868,14 +3981,14 @@ void Process_State_Machine(){
 		// First Time Section
 		if (systemstate_previous.Index != systemstate_current.Index)
 		{
-			MONITOR.println("Entered State: A3_PowerApplied_State");
+			MONITOR.println("Entered State: A3_IgnitionOn_State");
 
 			// Store Power On Trigger
-			A3_IgnitionOn_State.PowerTrigger = PowerOnTrigger::Applied;
+			CurrentPowerOnTrigger = PowerOnTrigger::Applied;
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerAppliedScreen);
-			//lv_label_set_text(ui_PowerAppliedTextArea,"A3 Power On by Ignition State");
+			lv_textarea_set_text(ui_PowerAppliedTextArea,"A3 Power On by Ignition State");
 
 
 			// =================== Sound ======================== 
@@ -3920,7 +4033,7 @@ void Process_State_Machine(){
 	}
 	else if (B1_MenuHelp_State.Index == systemstate_current.Index)
 	{	
-		watching = true;
+		
 		if (systemstate_previous.Index != systemstate_current.Index)
 		{	
 			MONITOR.println("Entered State: B1_MenuHelp_State");
@@ -3931,13 +4044,13 @@ void Process_State_Machine(){
 			lv_textarea_set_text(ui_MenuHelpTextArea,"B1 Menu Help State");
 
 
-			MONITOR.println("Determine Next State: B1_MenuHelp_State");
+			//MONITOR.println("Determine Next State: B1_MenuHelp_State");
 			// ================== Operation =======================
 			Determine_HPS_PPS(Determine_Next_State());
 
-			MONITOR.println("Starting Timer: B1_MenuHelp_State");
+			//MONITOR.println("Starting Timer: B1_MenuHelp_State");
 			// Enable the Timers
-			B1_MenuHelp_Timer.StartTimer(10000);
+			B1_MenuHelp_Timer.StartTimer(1000);
 
 			// Reset NoK9Timeout Flag
 			NoK9TimeoutFlag = false;
@@ -3949,16 +4062,16 @@ void Process_State_Machine(){
 			Reset_System_Alarm_State();
 			AlarmStateEnabled = false;
 
-			MONITOR.println("Normalizing State: B1_MenuHelp_State");
+			//MONITOR.println("Normalizing State: B1_MenuHelp_State");
 			// Normalize State
 			systemstate_previous= systemstate_current;
-			MONITOR.println("Exiting State Initial Loop");
+			//MONITOR.println("Exiting State Initial Loop");
 
 		}
 		else
 		{
 			// ================== Transitions =======================
-			MONITOR.println("Looping State: B1_MenuHelp_State");
+			//MONITOR.println("Looping State: B1_MenuHelp_State");
 			// Communications error detected
 			if (Check_Comms() == false)
 			{
@@ -4431,7 +4544,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
-			//lv_label_set_text(ui_PowerDownTextArea,"D6_NoK9LeftBehind PowerDown By Door Opened");
+			lv_textarea_set_text(ui_PowerDownTextArea,"D6_NoK9LeftBehind PowerDown By Door Opened");
 
 			// Start Timer
 			D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.StartTimer(4000);
@@ -4475,7 +4588,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
-			//lv_label_set_text(ui_PowerDownTextArea,"7_PowerDownByOKPress");
+			lv_textarea_set_text(ui_PowerDownTextArea,"7_PowerDownByOKPress");
 
 			// Start Timer
 			D7_PowerDownByOKPress_Timer.StartTimer(4000);
@@ -4519,7 +4632,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
-			//lv_label_set_text(ui_PowerDownTextArea,"D8_PowerDownByIgnitionOFF");
+			lv_textarea_set_text(ui_PowerDownTextArea,"D8_PowerDownByIgnitionOFF");
 
 			// Start Timer
 			D8_PowerDownByIgnitionOFF_Timer.StartTimer(4000);
@@ -4561,7 +4674,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
-			//lv_label_set_text(ui_PowerDownTextArea,"D9_PowerDownByHAandDPSetToAlwaysOFF");
+			lv_textarea_set_text(ui_PowerDownTextArea,"D9_PowerDownByHAandDPSetToAlwaysOFF");
 
 			// Start Timer
 			D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.StartTimer(4000);
@@ -4603,7 +4716,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
-			//lv_label_set_text(ui_PowerDownTextArea,"D10 Power Down By Power Press");
+			lv_textarea_set_text(ui_PowerDownTextArea,"D10 Power Down By Power Press");
 
 			// Start Timer
 			D10_PowerDownByPowerPress_Timer.StartTimer(4000);
@@ -4659,7 +4772,7 @@ void Process_State_Machine(){
 			MONITOR.println("Entered State: S1_Sleep_State");
 
 			lv_scr_load(ui_SleepScreen);
-			//lv_label_set_text(ui_SleepTextArea,"S1_Sleep");
+			lv_textarea_set_text(ui_SleepTextArea,"S1_Sleep");
 
 			// Clear Alarm Enabled Flag
 			Reset_System_Alarm_State();
@@ -4691,7 +4804,7 @@ void Process_State_Machine(){
 
 	}
 	
-	if (watching){MONITOR.printf("Exiting State Machine\n");}
+	
 }
 //void loop2();
 void setup() {
@@ -4794,7 +4907,7 @@ void setup() {
     systemsettings_default.AlarmColdSetIndex = 7;
 	systemsettings_default.System_Sleep = false;		// State Flag to determine if the system was been put to sleep
 	systemsettings_default.InitialPowerUpFlag = true;   // State flag to determine if the system was just powered on, clears when an idle screen is entered
-
+	
     SettingsLoaded = load_settings();
 
     update_menu_settings();
@@ -4805,8 +4918,10 @@ void setup() {
     Init_SystemStates();
 	Init_Timers();
 
+
+
     systemsettings_previous = systemsettings_current;
-	MONITOR.printf("vim_load\n");
+	//MONITOR.printf("vim_load\n");
 	data_global = vim_load();
 
     data_global.acedata_changed = false;
@@ -4814,7 +4929,7 @@ void setup() {
     data_global.engine_changed = true;
     data_global.k9_door_changed = true;
 
-	MONITOR.printf("vim_store\n");
+	//MONITOR.printf("vim_store\n");
 	vim_store(data_global);
 
     set_HPS(HIGH);
@@ -4823,7 +4938,7 @@ void setup() {
 	/*while(1) {
 		loop2();
 	}*/
-    MONITOR.printf("Exiting Setup()\n");
+    //MONITOR.printf("Exiting Setup()\n");
 
     
 }
@@ -4834,7 +4949,7 @@ void setup() {
 }*/
 void loop() {
 
-	if (watching){MONITOR.printf("Top of Main Loop\n");}
+	
 
     //Check XBee 
     if (last_packet.cmd == COMMAND_ID::ACKNOWLEDGE){
@@ -4870,7 +4985,7 @@ void loop() {
 
 
     }
-	if (watching){MONITOR.printf("checking cell signal\n");}
+	
 
     check_cell_signal();
 
@@ -4878,14 +4993,14 @@ void loop() {
     display_update();
 
 	
-	if (watching){MONITOR.printf("lv_timer_handler\n");}
+	
 
     lv_timer_handler();
 
     //MONITOR.printf("Calling Monitor Dev Tick\n");
-    //monitor_dev_tick(MONITOR);
+    monitor_dev_tick(MONITOR);
 
-	if (watching){MONITOR.printf("XBee Dev Tick\n");}
+	
 
     xbee_dev_tick(&my_xbee);
 
@@ -4893,34 +5008,34 @@ void loop() {
         on_xbee_error(last_packet.cmd, last_packet.status);
     }
 
-	if (watching){MONITOR.printf("Loading Global Data\n");}
+	
 	// // Load in Global VIM Data
 	data_global = vim_load();
 
 
 	// //MONITOR.printf("Calling AceCON Dev Tick\n");
-    //acecon_dev_tick();
+    acecon_dev_tick();
 
 	// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
-    //check_door_condition();
+    check_door_condition();
 
 	// //MONITOR.printf("ui_update_ACECON\n");
-    //ui_update_acecon();
+    ui_update_acecon();
 
-	// vTaskDelay(5);
+	vTaskDelay(5);
     // //================================================== State Machine Logic =========================================*/
-	if (watching){MONITOR.printf("Update Timers\n");}
+	
 	Update_Timers();
 
-	if (watching){MONITOR.printf("Process State Machine\n");}
+	
 	Process_State_Machine();
 
 	//MONITOR.printf("Exiting State Machine\n");
-	if (watching){MONITOR.printf("Storing VIM Data\n");}
+	
 
 	vim_store(data_global);
 	
-	if (watching){MONITOR.printf("End of Main Loop\n");}
+	
 	
 
 	
