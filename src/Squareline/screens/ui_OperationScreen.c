@@ -153,7 +153,7 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_x(ui_LabelLeftTemp, -86);
     lv_obj_set_y(ui_LabelLeftTemp, 45);
     lv_obj_set_align(ui_LabelLeftTemp, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_LabelLeftTemp, "-12.0");
+    lv_label_set_text(ui_LabelLeftTemp, "---");
 
     ui_LabelRightTemp = lv_label_create(ui_OperationScreen);
     lv_obj_set_width(ui_LabelRightTemp, LV_SIZE_CONTENT);   /// 1
@@ -161,7 +161,7 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_x(ui_LabelRightTemp, 88);
     lv_obj_set_y(ui_LabelRightTemp, 45);
     lv_obj_set_align(ui_LabelRightTemp, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_LabelRightTemp, "95.0");
+    lv_label_set_text(ui_LabelRightTemp, "---");
 
     ui_LabelTempAvg = lv_label_create(ui_OperationScreen);
     lv_obj_set_width(ui_LabelTempAvg, LV_SIZE_CONTENT);   /// 1
@@ -169,7 +169,7 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_x(ui_LabelTempAvg, 0);
     lv_obj_set_y(ui_LabelTempAvg, 34);
     lv_obj_set_align(ui_LabelTempAvg, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_LabelTempAvg, "41.5");
+    lv_label_set_text(ui_LabelTempAvg, "---");
 
     ui_ImgButtonEnterMenu1 = lv_imgbtn_create(ui_OperationScreen);
     lv_imgbtn_set_src(ui_ImgButtonEnterMenu1, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowrighticon_png, NULL);

@@ -10,15 +10,22 @@ void ui_PowerAppliedScreen_screen_init(void)
     ui_PowerAppliedScreen = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_PowerAppliedScreen, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
-    ui_PowerAppliedTextArea = lv_textarea_create(ui_PowerAppliedScreen);
-    lv_obj_set_width(ui_PowerAppliedTextArea, 222);
-    lv_obj_set_height(ui_PowerAppliedTextArea, 70);
-    lv_obj_set_x(ui_PowerAppliedTextArea, 4);
-    lv_obj_set_y(ui_PowerAppliedTextArea, 1);
-    lv_obj_set_align(ui_PowerAppliedTextArea, LV_ALIGN_CENTER);
-    lv_textarea_set_text(ui_PowerAppliedTextArea, "A1_POWERAPPLIED_STATE");
-    lv_textarea_set_placeholder_text(ui_PowerAppliedTextArea, "Placeholder...");
+    ui_Image4 = lv_img_create(ui_PowerAppliedScreen);
+    lv_img_set_src(ui_Image4, &ui_img_acek9logo_png);
+    lv_obj_set_width(ui_Image4, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_Image4, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_Image4, 0);
+    lv_obj_set_y(ui_Image4, -74);
+    lv_obj_set_align(ui_Image4, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_Image4, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_Image4, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
-
+    ui_LabelPowerAppliedScreen = lv_label_create(ui_PowerAppliedScreen);
+    lv_obj_set_width(ui_LabelPowerAppliedScreen, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_LabelPowerAppliedScreen, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_LabelPowerAppliedScreen, 0);
+    lv_obj_set_y(ui_LabelPowerAppliedScreen, 14);
+    lv_obj_set_align(ui_LabelPowerAppliedScreen, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_LabelPowerAppliedScreen, "Power Applied to Control Head");
 
 }

@@ -33,6 +33,7 @@ enum struct COMMAND_ID : int32_t {
     CONFIG,
     COMMAND,
     SUBSCRIBE,
+    UPDATE,
     INIT = 255
 };
 enum ACE_BOOL : uint32_t {
@@ -181,6 +182,16 @@ struct init_packet
     constexpr static const COMMAND_ID cmd_ID = COMMAND_ID::INIT;
     // uint32_t crc; (prepended to packet)      // CRC | 4 bytes | 32-bit unsigned word  | Indicates the CRC-32 value for the packet
     // csv files 
+};
+
+// A series of these is sent one after another until the entire update firmware file is sent. Any other message cancels the update
+// when it's complete a final packet with size of zero should be sent
+struct update_packet
+{
+    constexpr static const COMMAND_ID cmd_ID = COMMAND_ID::UPDATE;
+    // uint32_t crc; (prepended to packet)      // CRC | 4 bytes | 32-bit unsigned word  | Indicates the CRC-32 value for the packet
+    uint32_t size; // the number of significant bytes in the data field
+    uint8_t data[1024]; // preferably 8192
 };
 
 #endif // INTERFACE_H

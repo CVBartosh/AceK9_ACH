@@ -59,6 +59,7 @@ struct vim_data {
     bool engine_changed;
 
     // Aux Variables
+    bool AuxEnabled;
     bool Aux1Input_previous;
     bool Aux1Input_current;
     bool Aux2Input_previous;

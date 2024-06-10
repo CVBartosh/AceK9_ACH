@@ -16,7 +16,7 @@ void ui_NoK9Screen_screen_init(void)
     lv_obj_set_x(ui_NoK9TextArea, 4);
     lv_obj_set_y(ui_NoK9TextArea, 1);
     lv_obj_set_align(ui_NoK9TextArea, LV_ALIGN_CENTER);
-    lv_textarea_set_text(ui_NoK9TextArea, "B1 Menu Help State");
+    lv_textarea_set_text(ui_NoK9TextArea, "No K9 Screen");
     lv_textarea_set_placeholder_text(ui_NoK9TextArea, "Placeholder...");
 
 

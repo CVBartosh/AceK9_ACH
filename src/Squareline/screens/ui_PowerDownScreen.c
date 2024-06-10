@@ -10,15 +10,22 @@ void ui_PowerDownScreen_screen_init(void)
     ui_PowerDownScreen = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_PowerDownScreen, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
-    ui_PowerDownTextArea = lv_textarea_create(ui_PowerDownScreen);
-    lv_obj_set_width(ui_PowerDownTextArea, 222);
-    lv_obj_set_height(ui_PowerDownTextArea, 70);
-    lv_obj_set_x(ui_PowerDownTextArea, 4);
-    lv_obj_set_y(ui_PowerDownTextArea, 1);
-    lv_obj_set_align(ui_PowerDownTextArea, LV_ALIGN_CENTER);
-    lv_textarea_set_text(ui_PowerDownTextArea, "Power Down");
-    lv_textarea_set_placeholder_text(ui_PowerDownTextArea, "Placeholder...");
+    ui_Image5 = lv_img_create(ui_PowerDownScreen);
+    lv_img_set_src(ui_Image5, &ui_img_acek9logo_png);
+    lv_obj_set_width(ui_Image5, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_Image5, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_Image5, 0);
+    lv_obj_set_y(ui_Image5, -74);
+    lv_obj_set_align(ui_Image5, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_Image5, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_Image5, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
-
+    ui_LabelPowerDownScreen = lv_label_create(ui_PowerDownScreen);
+    lv_obj_set_width(ui_LabelPowerDownScreen, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_LabelPowerDownScreen, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_LabelPowerDownScreen, 0);
+    lv_obj_set_y(ui_LabelPowerDownScreen, 14);
+    lv_obj_set_align(ui_LabelPowerDownScreen, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_LabelPowerDownScreen, "Powering Down");
 
 }

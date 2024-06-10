@@ -63,6 +63,8 @@ static config_packet config_data;
 
 static command_packet command_data;
 
+static update_packet update_data;
+
 struct acecon {
     bool alm;
     bool hps;
@@ -135,6 +137,9 @@ bool UpdateDoorFlag = false;
 
 #define INGEAR	0
 #define PARKED	1
+
+bool GoToMenuFlag = false;
+
 
 vim_data data_global;
 
@@ -768,70 +773,70 @@ void Set_Next_State(SystemState nextstate)
 SystemState Determine_Next_State()
 {
 	MONITOR.println("Determine Next State");
-	MONITOR.printf("IngitionOn:  %s\r\n",data_global.ignitionOn_current?"TRUE":"FALSE");
-	switch (systemsettings_current.DoorPower)
-	{
-	case DoorOpt::d_CarONCarOFF:
-		MONITOR.println("Door Power: CarOnCarOFF");
-		break;
-	case DoorOpt::d_CarONManOFF :
-		MONITOR.println("Door Power: CarOnManOFF");
-		break;
-	case DoorOpt::d_ManONManOFF:
-		MONITOR.println("Door Power: ManOnManOFF");
-		break;
-	case DoorOpt::d_OFF:
-		MONITOR.println("Door Power: OFF");
-		break;
+	// MONITOR.printf("IngitionOn:  %s\r\n",data_global.ignitionOn_current?"TRUE":"FALSE");
+	// switch (systemsettings_current.DoorPower)
+	// {
+	// case DoorOpt::d_CarONCarOFF:
+	// 	MONITOR.println("Door Power: CarOnCarOFF");
+	// 	break;
+	// case DoorOpt::d_CarONManOFF :
+	// 	MONITOR.println("Door Power: CarOnManOFF");
+	// 	break;
+	// case DoorOpt::d_ManONManOFF:
+	// 	MONITOR.println("Door Power: ManOnManOFF");
+	// 	break;
+	// case DoorOpt::d_OFF:
+	// 	MONITOR.println("Door Power: OFF");
+	// 	break;
 	
-	default:
-		MONITOR.println("Door Power: Unknown");
-		break;
-	}			
-	switch (systemsettings_current.AlarmPower)
-	{
-	case PowerOpt::p_CarONCarOFF:
-		MONITOR.println("Alarm Power: CarOnCarOFF");
-		break;
-	case PowerOpt::p_CarONManOFF:
-		MONITOR.println("Alarm Power: CarOnManOFF");
-		break;
-	case PowerOpt::p_ManONManOFF:
-		MONITOR.println("Alarm Power: ManOnManOFF");
-		break;
-	case PowerOpt::p_OFF:
-		MONITOR.println("Alarm Power: OFF");
-		break;
-	case PowerOpt::p_NoK9Left:
-		MONITOR.println("Alarm Power: No K9");
-		break;
+	// default:
+	// 	MONITOR.println("Door Power: Unknown");
+	// 	break;
+	// }			
+	// switch (systemsettings_current.AlarmPower)
+	// {
+	// case PowerOpt::p_CarONCarOFF:
+	// 	MONITOR.println("Alarm Power: CarOnCarOFF");
+	// 	break;
+	// case PowerOpt::p_CarONManOFF:
+	// 	MONITOR.println("Alarm Power: CarOnManOFF");
+	// 	break;
+	// case PowerOpt::p_ManONManOFF:
+	// 	MONITOR.println("Alarm Power: ManOnManOFF");
+	// 	break;
+	// case PowerOpt::p_OFF:
+	// 	MONITOR.println("Alarm Power: OFF");
+	// 	break;
+	// case PowerOpt::p_NoK9Left:
+	// 	MONITOR.println("Alarm Power: No K9");
+	// 	break;
 	
-	default:
-		MONITOR.println("Alarm Power: Unknown");
-		break;
-	}		
+	// default:
+	// 	MONITOR.println("Alarm Power: Unknown");
+	// 	break;
+	// }		
 
 
 
-	switch (CurrentPowerOnTrigger)
-	{
-	case PowerOnTrigger::NoTrigger:
-		MONITOR.println("PowerOnTrigger: No Trigger");
-		break;
-	case PowerOnTrigger::IgnitionOn:
-		MONITOR.println("PowerOnTrigger: Ignition On");
-		break;
-	case PowerOnTrigger::Applied:
-		MONITOR.println("PowerOnTrigger: Applied");
-		break;
-	case PowerOnTrigger::PowerButtonPress:
-		MONITOR.println("PowerOnTrigger: Power Button Press");
-		break;
+	// switch (CurrentPowerOnTrigger)
+	// {
+	// case PowerOnTrigger::NoTrigger:
+	// 	MONITOR.println("PowerOnTrigger: No Trigger");
+	// 	break;
+	// case PowerOnTrigger::IgnitionOn:
+	// 	MONITOR.println("PowerOnTrigger: Ignition On");
+	// 	break;
+	// case PowerOnTrigger::Applied:
+	// 	MONITOR.println("PowerOnTrigger: Applied");
+	// 	break;
+	// case PowerOnTrigger::PowerButtonPress:
+	// 	MONITOR.println("PowerOnTrigger: Power Button Press");
+	// 	break;
 	
-	default:
-		MONITOR.println("PowerOnTrigger: Unknown");
-		break;
-	}			
+	// default:
+	// 	MONITOR.println("PowerOnTrigger: Unknown");
+	// 	break;
+	// }			
 	
 
 	if (CurrentPowerOnTrigger == PowerOnTrigger::Applied ||
@@ -1206,7 +1211,18 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
             last_received = true;
             
         }
-        break; 
+        break;
+		case COMMAND_ID::UPDATE: {
+            MONITOR.println("Update Packet Received");
+            update_packet pck;
+            memcpy(&pck,payload+5,payload_length-5);
+            
+            last_packet.cmd = pck.cmd_ID;
+            update_data = pck;
+            last_received = true;
+            
+        }
+        break;  
     }
 #ifdef DUMP_PACKETS
     // If all characters of message are printable, just print it as a string
@@ -1290,139 +1306,188 @@ uint32_t crc32(uint32_t crc, unsigned char *buf, size_t len)
 
 //================================================== ACECON Funcitons =========================================*/
 
+void set_HPS(bool value)
+{
+    aceconvalues_previous.hps = aceconvalues_current.hps;
+    aceconvalues_current.hps = value;
+    if (aceconvalues_current.hps){
+        lv_obj_add_state(ui_SwitchHPS, LV_STATE_CHECKED);
+    }else{
+        lv_obj_clear_state(ui_SwitchHPS, LV_STATE_CHECKED);
+    }
+    MONITOR.printf("HPS Val Set to  %s\r\n",aceconvalues_current.hps?"HIGH":"LOW");
+    digitalWrite(ACECON_HPS_OUT,value);
+}
+
+void set_PPS(bool value)
+{
+    aceconvalues_previous.pps = aceconvalues_current.pps;
+    aceconvalues_current.pps = value;
+    if (aceconvalues_current.pps){
+        lv_obj_add_state(ui_SwitchPPS, LV_STATE_CHECKED);
+    }else{
+        lv_obj_clear_state(ui_SwitchPPS, LV_STATE_CHECKED);
+    }
+    MONITOR.printf("PPS Val Set to  %s\r\n",aceconvalues_current.pps?"HIGH":"LOW");
+    digitalWrite(ACECON_PPS_OUT,value);
+}
+
+void set_PPT(bool value)
+{    
+    if (aceconvalues_current.ppt){
+        lv_obj_add_state(ui_SwitchPPT, LV_STATE_CHECKED);
+    }else{
+        lv_obj_clear_state(ui_SwitchPPT, LV_STATE_CHECKED);
+    }
+    MONITOR.printf("PPT Val Set to  %s\r\n",aceconvalues_current.ppt?"HIGH":"LOW");
+    digitalWrite(ACECON_PPT_OUT,value);
+}
+
+void set_ALM(bool value)
+{    
+    if (value){
+        lv_obj_add_state(ui_SwitchALM, LV_STATE_CHECKED);
+    }else{
+        lv_obj_clear_state(ui_SwitchALM, LV_STATE_CHECKED);
+    }
+    //MONITOR.printf("ALM Val Set to  %s\r\n",aceconvalues_current.alm?"HIGH":"LOW");
+    digitalWrite(ACECON_ALM_OUT,value);
+}
+
+
 void Process_System_Alarm_States()
 {
 	// Make Sure Alarms are enabled (this is state dependant)
-	// if (AlarmStateEnabled == false)
-	// {
-	// 	Current_System_Alarm_State = AlarmState::a_None; // Set to none
-	// 	Previous_System_Alarm_State = AlarmState::a_Init; // Setting previous to anything other than none will ensure that the alarm states will disable
+	if (AlarmStateEnabled == false)
+	{
+		Current_System_Alarm_State = AlarmState::a_None; // Set to none
+		Previous_System_Alarm_State = AlarmState::a_Init; // Setting previous to anything other than none will ensure that the alarm states will disable
 
-	// }
-	// else
-	// {
-	// 	// Turn Off Full Alarm if necessary
-	// 	if (Previous_System_Alarm_State == AlarmState::a_FullAlarm && Current_System_Alarm_State != AlarmState::a_FullAlarm)
-	// 	{
-	// 		// Set No Sound Pulse
-	// 		Set_SoundPulse(PulseProfile::pp_NoSound);
-	// 	}
+	}
+	else
+	{
+		// Turn Off Full Alarm if necessary
+		if (Previous_System_Alarm_State == AlarmState::a_FullAlarm && Current_System_Alarm_State != AlarmState::a_FullAlarm)
+		{
+			// Set No Sound Pulse
+			//Set_SoundPulse(PulseProfile::pp_NoSound);
+		}
 
-	// 	// System Alarm is in prealarm
-	// 	if (Current_System_Alarm_State == AlarmState::a_PreAlarm)
-	// 	{
-	// 		if (Previous_System_Alarm_State != AlarmState::a_PreAlarm)
-	// 		{
-	// 			//MONITOR.println("Alarm set to PreAlarm");
+		// System Alarm is in prealarm
+		if (Current_System_Alarm_State == AlarmState::a_PreAlarm)
+		{
+			if (Previous_System_Alarm_State != AlarmState::a_PreAlarm)
+			{
+				//MONITOR.println("Alarm set to PreAlarm");
 
-	// 			// Send HPT(ALM) Signal
-	// 			digitalWrite(ACECON_ALM, LOW);
+				// Send HPT(ALM) Signal
+				set_ALM(LOW);
 
-	// 			// Set Trigger Time and Counter
-	// 			PreAlarmTriggerTime = millis();
-	// 			PreviousPreAlarmCounter = 0;
-	// 			CurrentPreAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
-	// 			DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
+				// Set Trigger Time and Counter
+				PreAlarmTriggerTime = millis();
+				PreviousPreAlarmCounter = 0;
+				CurrentPreAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
+				DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
 
-	// 			// Enable Pre Alarm Notification Timer
-	// 			PreAlarmNotification_Timer.StartTimer(PreAlarmNotification_Timer.Threshold);
+				// Enable Pre Alarm Notification Timer
+				PreAlarmNotification_Timer.StartTimer(PreAlarmNotification_Timer.Threshold);
 
-	// 			// Enable Timer
-	// 			SystemAlarm_Timer.StartTimer(SystemAlarm_Timer.Threshold);
+				// Enable Timer
+				SystemAlarm_Timer.StartTimer(SystemAlarm_Timer.Threshold);
 
-	// 			// Set Prev State
-	// 			Previous_System_Alarm_State = Current_System_Alarm_State;
+				// Set Prev State
+				Previous_System_Alarm_State = Current_System_Alarm_State;
 
-	// 		}
+			}
 
-	// 		// Check if the Alarm conditions have been cleared
-	// 		if (CurrentBattErrorFlag == false && Current_Eng_Stall_Flag == false && Current_Temp_Alarm_Flag == false && Current_Temp_Sensor_Error_Flag == false && CurrentAuxInVal == AuxIn::Inactive)
-	// 		{
-	// 			// Battery Flag
-	// 			if (PreviousBattErrorFlag == true) { UpdateBattFlag = true; }
-	// 			// Stall Flag
-	// 			if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
-	// 			// Temperature Flag
-	// 			if (Previous_Temp_Alarm_Flag == true) { Update_Temp = true; }
-	// 			// Temperature Sensor Flag
-	// 			if (Previous_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
-	// 			// DaisyChain Flag
-	// 			if (PreviousAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
+			// Check if the Alarm conditions have been cleared
+			if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag == false && data_global.temp_errorFlag == false && data_global.Aux1Input_current == false && data_global.Aux2Input_current == false)
+			{
+				// Battery Flag
+				if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
+				// Stall Flag
+				if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
+				// Temperature Flag
+				if (Previous_Temp_Alarm_Flag == true) { Update_Temp = true; }
+				// Temperature Sensor Flag
+				if (Previous_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
+				// DaisyChain Flag
+				if (PreviousAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
 
-	// 			// Set the general update flag
-	// 			UpdateIconsFlag = true;
+				// Set the general update flag
+				UpdateIconsFlag = true;
 
-	// 			// Disable Pre Alarm Notification Timer
-	// 			PreAlarmNotification_Timer.StopTimer();
+				// Disable Pre Alarm Notification Timer
+				PreAlarmNotification_Timer.StopTimer();
 
-	// 			// Clear the OverFlow Flag and Disable the Timer
-	// 			SystemAlarm_Timer.StopTimer();
-	// 			DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
+				// Clear the OverFlow Flag and Disable the Timer
+				SystemAlarm_Timer.StopTimer();
+				DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
 
-	// 			// Set Alarm to None
-	// 			Previous_System_Alarm_State = Current_System_Alarm_State;
-	// 			Current_System_Alarm_State = AlarmState::a_None;
+				// Set Alarm to None
+				Previous_System_Alarm_State = Current_System_Alarm_State;
+				Current_System_Alarm_State = AlarmState::a_None;
 
-	// 		}
-	// 		// Check if the alarm needs to graduate to full
-	// 		else if (SystemAlarm_Timer.OverFlowFlag == true)
-	// 		{
+			}
+			// Check if the alarm needs to graduate to full
+			else if (SystemAlarm_Timer.OverFlowFlag == true)
+			{
+				
+				// Check Battery
+				if (data_global.batt_error_current == true) { data_global.battchanged = true; }
+				// Check Stall
+				if (Current_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
+				// Temperature Flag
+				if (Current_Temp_Alarm_Flag == true) { Update_Temp = true; }
+				// Temperaure Sensor Flag
+				if (Current_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
+				// DiasyChain Flag
+				if (CurrentAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
 
-	// 			// Check Battery
-	// 			if (CurrentBattErrorFlag == true) { UpdateBattFlag = true; }
-	// 			// Check Stall
-	// 			if (Current_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
-	// 			// Temperature Flag
-	// 			if (Current_Temp_Alarm_Flag == true) { Update_Temp = true; }
-	// 			// Temperaure Sensor Flag
-	// 			if (Current_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
-	// 			// DiasyChain Flag
-	// 			if (CurrentAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
+				// Set the General Update Flag
+				UpdateIconsFlag = true;
 
-	// 			// Set the General Update Flag
-	// 			UpdateIconsFlag = true;
+				// Set Alarm to Full
+				// Disable Pre Alarm Notification Timer
+				PreAlarmNotification_Timer.StopTimer();
+				DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
 
-	// 			// Set Alarm to Full
-	// 			// Disable Pre Alarm Notification Timer
-	// 			PreAlarmNotification_Timer.StopTimer();
-	// 			DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
+				Previous_System_Alarm_State = Current_System_Alarm_State;
+				Current_System_Alarm_State = AlarmState::a_FullAlarm;
+			}
+			// Check if the Countdown Timer needs to be updated
+			else if (PreAlarmNotification_Timer.OverFlowFlag == true)
+			{
+				PreAlarmNotification_Timer.OverFlowFlag = false;
+				PreAlarmNotification_Timer.SyncTimerVal();
 
-	// 			Previous_System_Alarm_State = Current_System_Alarm_State;
-	// 			Current_System_Alarm_State = AlarmState::a_FullAlarm;
-	// 		}
-	// 		// Check if the Countdown Timer needs to be updated
-	// 		else if (PreAlarmNotification_Timer.OverFlowFlag == true)
-	// 		{
-	// 			PreAlarmNotification_Timer.OverFlowFlag = false;
-	// 			PreAlarmNotification_Timer.SyncTimerVal();
+				// Set Pre Alarm Sound Pulse
+				//Set_SoundPulse(PulseProfile::pp_DoubleBeep);
 
-	// 			// Set Pre Alarm Sound Pulse
-	// 			Set_SoundPulse(PulseProfile::pp_DoubleBeep);
+			}
 
-	// 		}
+			// Check if the counter has changed enough to warrant an update to the screen
+			CurrentPreAlarmCounter = static_cast<int>((millis() - PreAlarmTriggerTime) / 1000);
 
-	// 		// Check if the counter has changed enough to warrant an update to the screen
-	// 		CurrentPreAlarmCounter = static_cast<int>((millis() - PreAlarmTriggerTime) / 1000);
+			if (CurrentPreAlarmCounter != PreviousPreAlarmCounter)
+			{
+				PreviousPreAlarmCounter = CurrentPreAlarmCounter;
 
-	// 		if (CurrentPreAlarmCounter != PreviousPreAlarmCounter)
-	// 		{
-	// 			PreviousPreAlarmCounter = CurrentPreAlarmCounter;
+				// Set General Update Flag
+				UpdateIconsFlag = true;
 
-	// 			// Set General Update Flag
-	// 			UpdateIconsFlag = true;
+				// Update Display Counter
+				DisplayPreAlarmCounter = MaxPreAlarmTime - CurrentPreAlarmCounter;
 
-	// 			// Update Display Counter
-	// 			DisplayPreAlarmCounter = MaxPreAlarmTime - CurrentPreAlarmCounter;
+				// Make sure it doesn't go below zero
+				if (DisplayPreAlarmCounter < 0) { DisplayPreAlarmCounter = 0; }
 
-	// 			// Make sure it doesn't go below zero
-	// 			if (DisplayPreAlarmCounter < 0) { DisplayPreAlarmCounter = 0; }
-
-	// 			UpdatePreAlarmFlag = true;
-	// 			UpdateIconsFlag;
-	// 		}
+				UpdatePreAlarmFlag = true;
+				UpdateIconsFlag;
+			}
 
 
-	// 	}
+		}
 	// 	// System is Snoozed
 	// 	else if (Current_System_Alarm_State == AlarmState::a_Snooze)
 	// 	{
@@ -1448,10 +1513,10 @@ void Process_System_Alarm_States()
 	// 		}
 
 	// 		// Check if all Alarm conditions have been cleared
-	// 		if (CurrentBattErrorFlag == false && Current_Eng_Stall_Flag == false && Current_Temp_Alarm_Flag == false && Current_Temp_Sensor_Error_Flag == false && CurrentAuxInVal == AuxIn::Inactive)
+	// 		if (data_global.batt_error_current == false && Current_Eng_Stall_Flag == false && Current_Temp_Alarm_Flag == false && Current_Temp_Sensor_Error_Flag == false && CurrentAuxInVal == AuxIn::Inactive)
 	// 		{
 	// 			// Check Battery
-	// 			if (PreviousBattErrorFlag == true) { UpdateBattFlag = true; }
+	// 			if (PreviousBattErrorFlag == true) { data_global.battchanged = true; }
 	// 			//Check Stall
 	// 			if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
 	// 			// Check Temperature
@@ -1474,7 +1539,7 @@ void Process_System_Alarm_States()
 	// 		{
 
 	// 			// Check Battery
-	// 			if (CurrentBattErrorFlag == true) { UpdateBattFlag = true; }
+	// 			if (data_global.batt_error_current == true) { data_global.battchanged = true; }
 	// 			// Check Stall
 	// 			if (Current_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
 	// 			// Temperature Flag
@@ -1545,10 +1610,10 @@ void Process_System_Alarm_States()
 	// 		}
 
 	// 		// Check if all Alarm conditions have been cleared and System Test is not Active. If System test is active then that will be handled by the system test state
-	// 		if (CurrentBattErrorFlag == false && Current_Eng_Stall_Flag == false && Current_Temp_Alarm_Flag == false && Current_Temp_Sensor_Error_Flag == false && System_Test_Alarm_Active == false && CurrentAuxInVal == AuxIn::Inactive)
+	// 		if (data_global.batt_error_current == false && Current_Eng_Stall_Flag == false && Current_Temp_Alarm_Flag == false && Current_Temp_Sensor_Error_Flag == false && System_Test_Alarm_Active == false && CurrentAuxInVal == AuxIn::Inactive)
 	// 		{
 	// 			// Check Battery
-	// 			if (PreviousBattErrorFlag == true) { UpdateBattFlag = true; }
+	// 			if (PreviousBattErrorFlag == true) { data_global.battchanged = true; }
 	// 			//Check Stall
 	// 			if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
 	// 			// Check Temperature
@@ -1618,10 +1683,10 @@ void Process_System_Alarm_States()
 	// 		}
 
 	// 		// Check Battery, Stall, Temp Alarm, Aux
-	// 		if (CurrentBattErrorFlag == true || Current_Eng_Stall_Flag == true || Current_Temp_Alarm_Flag == true || Current_Temp_Sensor_Error_Flag == true || CurrentAuxInVal == AuxIn::Active)
+	// 		if (data_global.batt_error_current == true || Current_Eng_Stall_Flag == true || Current_Temp_Alarm_Flag == true || Current_Temp_Sensor_Error_Flag == true || CurrentAuxInVal == AuxIn::Active)
 	// 		{
 	// 			// Check Battery
-	// 			if (PreviousBattErrorFlag == true) { UpdateBattFlag = true; }
+	// 			if (PreviousBattErrorFlag == true) { data_global.battchanged = true; }
 	// 			// Check Stall
 	// 			if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
 	// 			// Check Temp
@@ -1668,7 +1733,7 @@ void Process_System_Alarm_States()
 	// 	}
 
 
-	// }
+	}
 
 }
 
@@ -1699,7 +1764,7 @@ void Reset_System_Alarm_State()
 	// SnoozeAlarm_Timer.StopTimer();
 
 	// // Clear any update flags
-	// CurrentBattErrorFlag = false;
+	// data_global.batt_error_current = false;
 	// Current_Eng_Stall_Flag = false;
 	// Current_Temp_Alarm_Flag = false;
 	// Current_Temp_Sensor_Error_Flag = false;
@@ -1790,56 +1855,6 @@ void Check_IBoxPopped()
 
 
 
-}
-
-void set_HPS(bool value)
-{
-    aceconvalues_previous.hps = aceconvalues_current.hps;
-    aceconvalues_current.hps = value;
-    if (aceconvalues_current.hps){
-        lv_obj_add_state(ui_SwitchHPS, LV_STATE_CHECKED);
-    }else{
-        lv_obj_clear_state(ui_SwitchHPS, LV_STATE_CHECKED);
-    }
-    MONITOR.printf("HPS Val Set to  %s\r\n",aceconvalues_current.hps?"HIGH":"LOW");
-    digitalWrite(ACECON_HPS_OUT,value);
-}
-
-void set_PPS(bool value)
-{
-    aceconvalues_previous.pps = aceconvalues_current.pps;
-    aceconvalues_current.pps = value;
-    if (aceconvalues_current.pps){
-        lv_obj_add_state(ui_SwitchPPS, LV_STATE_CHECKED);
-    }else{
-        lv_obj_clear_state(ui_SwitchPPS, LV_STATE_CHECKED);
-    }
-    MONITOR.printf("PPS Val Set to  %s\r\n",aceconvalues_current.pps?"HIGH":"LOW");
-    digitalWrite(ACECON_PPS_OUT,value);
-}
-
-void set_PPT(bool value)
-{    
-    if (aceconvalues_current.ppt){
-        lv_obj_add_state(ui_SwitchPPT, LV_STATE_CHECKED);
-    }else{
-        lv_obj_clear_state(ui_SwitchPPT, LV_STATE_CHECKED);
-    }
-    MONITOR.printf("PPT Val Set to  %s\r\n",aceconvalues_current.ppt?"HIGH":"LOW");
-    digitalWrite(ACECON_PPT_OUT,value);
-}
-
-void set_ALM(bool value)
-{
-    aceconvalues_previous.alm = aceconvalues_current.alm;
-    aceconvalues_current.alm = value;
-    if (aceconvalues_current.alm){
-        lv_obj_add_state(ui_SwitchALM, LV_STATE_CHECKED);
-    }else{
-        lv_obj_clear_state(ui_SwitchALM, LV_STATE_CHECKED);
-    }
-    //MONITOR.printf("ALM Val Set to  %s\r\n",aceconvalues_current.alm?"HIGH":"LOW");
-    digitalWrite(ACECON_ALM_OUT,value);
 }
 
 void send_init_packet() {
@@ -2381,7 +2396,7 @@ void ui_update_acecon() {
             lv_label_set_text(ui_LabelTemp1Val,szLeftTemp);
             lv_label_set_text(ui_LabelLeftTemp,szLeftTemp);
         }
-
+				
         if (data_global.rightTemp_previous!=data_global.rightTemp_current || data_global.units_changed) {
             ////MONITOR.println("UI: Updating Right Temp");
             static char szRightTemp[6];
@@ -2859,6 +2874,20 @@ static void menu_AlarmPower_handler(lv_event_t * e)
 
 }
 
+static void button_GoToMenu_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_CLICKED) {
+        
+		MONITOR.println("Go To Menu Button Pressed");
+        GoToMenuFlag = true;
+
+
+    }
+
+}
+
 static void menu_DoorPower_handler(lv_event_t * e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -3211,9 +3240,11 @@ static void menu_AuxInput_handler(lv_event_t * e)
         if (lv_obj_get_state(obj) & LV_STATE_CHECKED){
             //MONITOR.println("True");
             systemsettings_current.AuxInputEnabled = true;
+			data_global.AuxEnabled = true;
         }else{
             //MONITOR.println("False");
             systemsettings_current.AuxInputEnabled= false;
+			data_global.AuxEnabled = false;
         }
             
 
@@ -3479,6 +3510,42 @@ void process_vim(const char* incoming, void* state) {
 					data_global.batt_error_current = false;
 				}
 
+				// Everytime this loops and the batt error flag is true, increment count. if not clear the counter
+				if (data_global.batt_error_current == true)
+				{
+					// increment counter
+					data_global.BadBatteryCounter++;
+
+					// Check the Counter
+					if (data_global.BadBatteryCounter < MaxBadBattValCounter)
+					{
+						// Counter has not gone over yet, the system has not had enough time to truly process the battery state
+
+						// Manually clear the Batt Error Flag and do not update the icons
+						data_global.batt_error_current = false;
+					}
+					else
+					{
+						// Don't allow the counter to go over the max
+						data_global.BadBatteryCounter = 0;
+
+						// Battery Value has been "bad" for sufficient time to be valid
+
+						//CurrentDebug_Priority = Debug_Priority::High;
+						MONITOR.println("Setting Pre Alert Text: LO BATT");
+
+						PreAlertText = "LO BATT ALERT";
+						FullAlarmText = "LO BATT ALARM";
+
+
+					}
+
+				}
+				else{
+
+				}
+
+
 				if (data_global.batt_error_previous != data_global.batt_error_current){
 					data_global.battchanged = true;
 				}
@@ -3528,24 +3595,38 @@ void process_vim(const char* incoming, void* state) {
 
 				//================================================== Aux Value =========================================*/
 
-				data_global.Aux1Input_previous = data_global.Aux1Input_current;
-				data_global.Aux2Input_previous = data_global.Aux2Input_current;
-
-				if (line.charAt(ACEDATA_Aux1_Input_POS)=='1'){
-					data_global.Aux1Input_current = true;
-				}else{
-					data_global.Aux1Input_current = false;
-				}
-
-				if (line.charAt(ACEDATA_Aux2_Input_POS)=='1'){
-					data_global.Aux2Input_current = true;
-				}else{
-					data_global.Aux2Input_current = false;
-				}
 				
+				
+				if(data_global.AuxEnabled){
+
+					data_global.Aux1Input_previous = data_global.Aux1Input_current;
+
+					if (line.charAt(ACEDATA_Aux1_Input_POS)=='1'){
+						data_global.Aux1Input_current = true;
+					}else{
+						data_global.Aux1Input_current = false;
+					}
+
+					data_global.Aux2Input_previous = data_global.Aux2Input_current;
+
+					if (line.charAt(ACEDATA_Aux2_Input_POS)=='1'){
+						data_global.Aux2Input_current = true;
+					}else{
+						data_global.Aux2Input_current = false;
+					}
+
+				}
+
+				
+				
+
+
+
 				if (data_global.Aux1Input_previous!=data_global.Aux1Input_current || data_global.Aux2Input_previous!=data_global.Aux2Input_current){
 					data_global.aux_changed = true;
 				}
+				
+				
 				const char* str = line.substring(ACEDATA_VIM_SN_POS,ACEDATA_VIM_SN_POS+ACEDATA_VIM_SN_LENGTH).c_str();
 				//================================================== Serial Number Value =========================================*/
 				strncpy(data_global.VIMSerialNumber,str,sizeof(data_global.VIMSerialNumber));
@@ -3585,71 +3666,70 @@ void acecon_dev_tick() {
     
     //================================================== Read ACECON Inputs =========================================*/
     aceconvalues_previous = aceconvalues_current;
-    aceconvalues_current.ppt = digitalRead(ACECON_POP_IN);
     
 	
-	
+	aceconvalues_current.ppt = digitalRead(ACECON_POP_IN);
+	aceconvalues_current.alm = digitalRead( ACECON_ALM_OUT);
+
 	aceconvalues_current.pps = digitalRead(ACECON_PPS_IN);
-    	//system is in gear
-		if (aceconvalues_current.pps == INGEAR)
+	//system is in gear
+	if (aceconvalues_current.pps == INGEAR)
+	{
+
+		// Check if a screen update is needed
+		if (data_global.inGear == PARKED)
 		{
-
-			// Check if a screen update is needed
-			if (data_global.inGear == PARKED)
-			{
-				// Set Update Flags
-				data_global.engine_changed = true;
-			}
-
-			// Set to In Gear
-			data_global.inGear = INGEAR;
-
-			// Enable the clear timer
-			Clear_Gear_Timer.StartTimer(Clear_Gear_Timer.Threshold);
-
+			// Set Update Flags
+			data_global.engine_changed = true;
 		}
 
-		if (Clear_Gear_Timer.OverFlowFlag == true || Clear_Gear_Timer.TimerEnable == false)
+		// Set to In Gear
+		data_global.inGear = INGEAR;
+
+		// Enable the clear timer
+		Clear_Gear_Timer.StartTimer(Clear_Gear_Timer.Threshold);
+
+	}
+
+	if (Clear_Gear_Timer.OverFlowFlag == true || Clear_Gear_Timer.TimerEnable == false)
+	{
+		// Check if a screen update is needed
+		if (data_global.inGear == INGEAR)
 		{
-			// Check if a screen update is needed
-			if (data_global.inGear == INGEAR)
-			{
-				// Set Update Flags
-				data_global.engine_changed = true;
-			}
-
-			// Stop Timer
-			Clear_Gear_Timer.StopTimer();
-
-			// Set to In Park
-			data_global.inGear = PARKED;
-
+			// Set Update Flags
+			data_global.engine_changed = true;
 		}
+
+		// Stop Timer
+		Clear_Gear_Timer.StopTimer();
+
+		// Set to In Park
+		data_global.inGear = PARKED;
+
+	}
 	
 	
 	
 	aceconvalues_current.ign = digitalRead(ACECON_IGN_IN);
-		// Rising Edge Detected
-		if (aceconvalues_previous.ign == false && aceconvalues_current.ign == true)
-		{
-			data_global.ignitionEdge_current = IgnEdge::it_Rising;
-			//MONITOR.println("Ignition Rising Edge Detected");
-		}
-		// Falling Edge Detected
-		else if (aceconvalues_previous.ign == true && aceconvalues_current.ign == false)
-		{
-			
-			data_global.ignitionEdge_current = IgnEdge::it_Falling;
-			//MONITOR.println("Ignition Falling Edge Detected");
-		}
-		// No change
-		else
-		{
-			
-		}
-
-
-
+	// Rising Edge Detected
+	if (aceconvalues_previous.ign == false && aceconvalues_current.ign == true)
+	{
+		data_global.ignitionEdge_current = IgnEdge::it_Rising;
+		//MONITOR.println("Ignition Rising Edge Detected");
+	}
+	// Falling Edge Detected
+	else if (aceconvalues_previous.ign == true && aceconvalues_current.ign == false)
+	{
+		
+		data_global.ignitionEdge_current = IgnEdge::it_Falling;
+		//MONITOR.println("Ignition Falling Edge Detected");
+	}
+	// No change
+	else
+	{
+		
+	}
+	
 
     if(aceconvalues_previous.ppt != aceconvalues_current.ppt) {
         //MONITOR.printf("PPT Val Changed to  %s\r\n",aceconvalues_current.ppt?"HIGH":"LOW");
@@ -3886,8 +3966,8 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerAppliedScreen);
-			lv_textarea_set_text(ui_PowerAppliedTextArea,"A1 Power Applied State");
-
+			lv_label_set_text(ui_LabelPowerAppliedScreen,"Power Applied To Control Head");
+			
 
 			// =================== Sound ======================== 
 
@@ -3922,47 +4002,29 @@ void Process_State_Machine(){
 				// ================== Transitions =======================
 
 
-					switch (CurrentPowerOnTrigger)
-					{
-					case PowerOnTrigger::NoTrigger:
-						MONITOR.println("===== PowerOnTrigger: No Trigger");
-						break;
-					case PowerOnTrigger::IgnitionOn:
-						MONITOR.println("===== PowerOnTrigger: Ignition On");
-						break;
-					case PowerOnTrigger::Applied:
-						MONITOR.println("===== PowerOnTrigger: Applied");
-						break;
-					case PowerOnTrigger::PowerButtonPress:
-						MONITOR.println("===== PowerOnTrigger: Power Button Press");
-						break;
+					// switch (CurrentPowerOnTrigger)
+					// {
+					// case PowerOnTrigger::NoTrigger:
+					// 	MONITOR.println("===== PowerOnTrigger: No Trigger");
+					// 	break;
+					// case PowerOnTrigger::IgnitionOn:
+					// 	MONITOR.println("===== PowerOnTrigger: Ignition On");
+					// 	break;
+					// case PowerOnTrigger::Applied:
+					// 	MONITOR.println("===== PowerOnTrigger: Applied");
+					// 	break;
+					// case PowerOnTrigger::PowerButtonPress:
+					// 	MONITOR.println("===== PowerOnTrigger: Power Button Press");
+					// 	break;
 					
-					default:
-						MONITOR.println("===== PowerOnTrigger: Unknown");
-						break;
-					}		
+					// default:
+					// 	MONITOR.println("===== PowerOnTrigger: Unknown");
+					// 	break;
+					// }		
 
 				Set_Next_State(B1_MenuHelp_State);
 
-				switch (CurrentPowerOnTrigger)
-					{
-					case PowerOnTrigger::NoTrigger:
-						MONITOR.println("===== PowerOnTrigger: No Trigger");
-						break;
-					case PowerOnTrigger::IgnitionOn:
-						MONITOR.println("===== PowerOnTrigger: Ignition On");
-						break;
-					case PowerOnTrigger::Applied:
-						MONITOR.println("===== PowerOnTrigger: Applied");
-						break;
-					case PowerOnTrigger::PowerButtonPress:
-						MONITOR.println("===== PowerOnTrigger: Power Button Press");
-						break;
-					
-					default:
-						MONITOR.println("===== PowerOnTrigger: Unknown");
-						break;
-					}	
+				
 
 			}
 
@@ -3988,7 +4050,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerAppliedScreen);
-			lv_textarea_set_text(ui_PowerAppliedTextArea,"A3 Power On by Ignition State");
+			lv_label_set_text(ui_LabelPowerAppliedScreen,"Power On by Ignition");
 
 
 			// =================== Sound ======================== 
@@ -4040,9 +4102,6 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_MenuHelpScreen);
-			// labels are not textareas - that was the problem
-			lv_textarea_set_text(ui_MenuHelpTextArea,"B1 Menu Help State");
-
 
 			//MONITOR.println("Determine Next State: B1_MenuHelp_State");
 			// ================== Operation =======================
@@ -4050,7 +4109,7 @@ void Process_State_Machine(){
 
 			//MONITOR.println("Starting Timer: B1_MenuHelp_State");
 			// Enable the Timers
-			B1_MenuHelp_Timer.StartTimer(1000);
+			B1_MenuHelp_Timer.StartTimer(3000);
 
 			// Reset NoK9Timeout Flag
 			NoK9TimeoutFlag = false;
@@ -4110,7 +4169,10 @@ void Process_State_Machine(){
 			set_PPS(HIGH);
 
 			// ================== Display =======================
-			lv_scr_load(ui_OperationScreen);
+			if (!GoToMenuFlag){
+				lv_scr_load(ui_OperationScreen);
+			}
+			
 
 			// Enable Comm Error Timer if not allready enabled
 			if (E1_VIMCommunicationsError_Timer.TimerEnable == false)
@@ -4238,8 +4300,9 @@ void Process_State_Machine(){
 			
 
 			// ================== Display =======================
-			lv_scr_load(ui_OperationScreen);
-
+			if (!GoToMenuFlag){
+				lv_scr_load(ui_OperationScreen);
+			}
 
 			// Enable Comm Error Timer if not allready enabled
 			if (E1_VIMCommunicationsError_Timer.TimerEnable == false)
@@ -4339,7 +4402,9 @@ void Process_State_Machine(){
 			set_PPS(HIGH);
 			
 			// ================== Display =======================
-			lv_scr_load(ui_OperationScreen);
+			if (!GoToMenuFlag){
+				lv_scr_load(ui_OperationScreen);
+			}
 
 			// Enable Comm Error Timer if not allready enabled
 			if (E1_VIMCommunicationsError_Timer.TimerEnable == false)
@@ -4544,7 +4609,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
-			lv_textarea_set_text(ui_PowerDownTextArea,"D6_NoK9LeftBehind PowerDown By Door Opened");
+			lv_label_set_text(ui_LabelPowerDownScreen,"D6_NoK9LeftBehind PowerDown By Door Opened");
 
 			// Start Timer
 			D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.StartTimer(4000);
@@ -4588,7 +4653,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
-			lv_textarea_set_text(ui_PowerDownTextArea,"7_PowerDownByOKPress");
+			lv_label_set_text(ui_LabelPowerDownScreen,"D7_PowerDownByOKPress");
 
 			// Start Timer
 			D7_PowerDownByOKPress_Timer.StartTimer(4000);
@@ -4632,7 +4697,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
-			lv_textarea_set_text(ui_PowerDownTextArea,"D8_PowerDownByIgnitionOFF");
+			lv_label_set_text(ui_LabelPowerDownScreen,"D8_PowerDownByIgnitionOFF");
 
 			// Start Timer
 			D8_PowerDownByIgnitionOFF_Timer.StartTimer(4000);
@@ -4674,7 +4739,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
-			lv_textarea_set_text(ui_PowerDownTextArea,"D9_PowerDownByHAandDPSetToAlwaysOFF");
+			lv_label_set_text(ui_LabelPowerDownScreen,"D9_PowerDownByHAandDPSetToAlwaysOFF");
 
 			// Start Timer
 			D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.StartTimer(4000);
@@ -4716,7 +4781,7 @@ void Process_State_Machine(){
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
-			lv_textarea_set_text(ui_PowerDownTextArea,"D10 Power Down By Power Press");
+			lv_label_set_text(ui_LabelPowerDownScreen,"D10 Power Down By Power Press");
 
 			// Start Timer
 			D10_PowerDownByPowerPress_Timer.StartTimer(4000);
@@ -4806,7 +4871,11 @@ void Process_State_Machine(){
 	
 	
 }
-//void loop2();
+
+
+
+
+
 void setup() {
 	MONITOR.begin(115200);
 	SPIFFS.begin(true);
@@ -4832,6 +4901,7 @@ void setup() {
     lv_obj_add_event_cb(ui_CheckboxAuxIn, menu_AuxInput_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_CheckboxStallMonitor, menu_StallMonitor_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_BTNRestoreDefaults, menu_RestoreDefaults_handler, LV_EVENT_ALL, NULL);
+	lv_obj_add_event_cb(ui_btnGoToMenu, button_GoToMenu_handler, LV_EVENT_ALL, NULL);
 
     lv_obj_add_event_cb(ui_ImgButtonExitMenu1, menu_ExitMenu_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_ImgButtonExitMenu2, menu_ExitMenu_handler, LV_EVENT_ALL, NULL);

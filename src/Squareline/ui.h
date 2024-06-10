@@ -215,15 +215,21 @@ extern lv_obj_t * ui_PowerOffTextArea;
 // SCREEN: ui_PowerAppliedScreen
 void ui_PowerAppliedScreen_screen_init(void);
 extern lv_obj_t * ui_PowerAppliedScreen;
-extern lv_obj_t * ui_PowerAppliedTextArea;
+extern lv_obj_t * ui_Image4;
+extern lv_obj_t * ui_LabelPowerAppliedScreen;
 // SCREEN: ui_MenuHelpScreen
 void ui_MenuHelpScreen_screen_init(void);
 extern lv_obj_t * ui_MenuHelpScreen;
-extern lv_obj_t * ui_MenuHelpTextArea;
+extern lv_obj_t * ui_Label1;
+extern lv_obj_t * ui_Image1;
+void ui_event_btnGoToMenu(lv_event_t * e);
+extern lv_obj_t * ui_btnGoToMenu;
+extern lv_obj_t * ui_Label3;
 // SCREEN: ui_PowerDownScreen
 void ui_PowerDownScreen_screen_init(void);
 extern lv_obj_t * ui_PowerDownScreen;
-extern lv_obj_t * ui_PowerDownTextArea;
+extern lv_obj_t * ui_Image5;
+extern lv_obj_t * ui_LabelPowerDownScreen;
 // SCREEN: ui_SleepScreen
 void ui_SleepScreen_screen_init(void);
 extern lv_obj_t * ui_SleepScreen;
