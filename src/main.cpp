@@ -139,6 +139,7 @@ bool UpdateDoorFlag = false;
 #define PARKED	1
 
 bool GoToMenuFlag = false;
+bool redrawFlag = false;
 
 
 vim_data data_global;
@@ -1401,21 +1402,21 @@ void Process_System_Alarm_States()
 			}
 
 			// Check if the Alarm conditions have been cleared
-			if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag == false && data_global.temp_errorFlag == false && data_global.Aux1Input_current == false && data_global.Aux2Input_current == false)
+			if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && data_global.Aux1Input_current == false && data_global.Aux2Input_current == false)
 			{
 				// Battery Flag
 				if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
 				// Stall Flag
 				if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
 				// Temperature Flag
-				if (Previous_Temp_Alarm_Flag == true) { Update_Temp = true; }
+				if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
 				// Temperature Sensor Flag
-				if (Previous_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
+				if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
 				// DaisyChain Flag
-				if (PreviousAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
+				if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
 
 				// Set the general update flag
-				UpdateIconsFlag = true;
+				data_global.updateIcons  = true;
 
 				// Disable Pre Alarm Notification Timer
 				PreAlarmNotification_Timer.StopTimer();
@@ -1436,16 +1437,16 @@ void Process_System_Alarm_States()
 				// Check Battery
 				if (data_global.batt_error_current == true) { data_global.battchanged = true; }
 				// Check Stall
-				if (Current_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
+				if (data_global.engineStalled_current == true) { data_global.engine_changed = true; }
 				// Temperature Flag
-				if (Current_Temp_Alarm_Flag == true) { Update_Temp = true; }
+				if (data_global.temp_alarmFlag_current == true) { data_global.temp_changed = true; }
 				// Temperaure Sensor Flag
-				if (Current_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
+				if (data_global.temp_errorFlag_current == true) { data_global.temp_changed = true; }
 				// DiasyChain Flag
-				if (CurrentAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
+				if (data_global.Aux1Input_current == true || data_global.Aux2Input_current == true) { data_global.aux_changed = true; }
 
 				// Set the General Update Flag
-				UpdateIconsFlag = true;
+				data_global.updateIcons = true;
 
 				// Set Alarm to Full
 				// Disable Pre Alarm Notification Timer
@@ -1474,7 +1475,7 @@ void Process_System_Alarm_States()
 				PreviousPreAlarmCounter = CurrentPreAlarmCounter;
 
 				// Set General Update Flag
-				UpdateIconsFlag = true;
+				data_global.updateIcons = true;
 
 				// Update Display Counter
 				DisplayPreAlarmCounter = MaxPreAlarmTime - CurrentPreAlarmCounter;
@@ -1483,107 +1484,107 @@ void Process_System_Alarm_States()
 				if (DisplayPreAlarmCounter < 0) { DisplayPreAlarmCounter = 0; }
 
 				UpdatePreAlarmFlag = true;
-				UpdateIconsFlag;
+				data_global.updateIcons = true;
 			}
 
 
 		}
-	// 	// System is Snoozed
-	// 	else if (Current_System_Alarm_State == AlarmState::a_Snooze)
-	// 	{
-	// 		if (Previous_System_Alarm_State != AlarmState::a_Snooze)
-	// 		{
-	// 			//MONITOR.println("Alarm set to Snooze");
+		// System is Snoozed
+		else if (Current_System_Alarm_State == AlarmState::a_Snooze)
+		{
+			if (Previous_System_Alarm_State != AlarmState::a_Snooze)
+			{
+				//MONITOR.println("Alarm set to Snooze");
 
-	// 			// Send HPT(ALM) Signal
-	// 			digitalWrite(ACECON_ALM, LOW);
+				// Send HPT(ALM) Signal
+				set_ALM(LOW);
 
-	// 			// Set Trigger Time and Counter
-	// 			SnoozeAlarmTriggerTime = millis();
-	// 			PreviousSnoozeAlarmCounter = 0;
-	// 			CurrentSnoozeAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
-	// 			DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
+				// Set Trigger Time and Counter
+				SnoozeAlarmTriggerTime = millis();
+				PreviousSnoozeAlarmCounter = 0;
+				CurrentSnoozeAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
+				DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
 
-	// 			// Enable Pre Alarm Notification Timer
-	// 			SnoozeAlarm_Timer.StartTimer(SnoozeAlarm_Timer.Threshold);
+				// Enable Pre Alarm Notification Timer
+				SnoozeAlarm_Timer.StartTimer(SnoozeAlarm_Timer.Threshold);
 
-	// 			// Set Prev State
-	// 			Previous_System_Alarm_State = Current_System_Alarm_State;
+				// Set Prev State
+				Previous_System_Alarm_State = Current_System_Alarm_State;
 
-	// 		}
+			}
 
-	// 		// Check if all Alarm conditions have been cleared
-	// 		if (data_global.batt_error_current == false && Current_Eng_Stall_Flag == false && Current_Temp_Alarm_Flag == false && Current_Temp_Sensor_Error_Flag == false && CurrentAuxInVal == AuxIn::Inactive)
-	// 		{
-	// 			// Check Battery
-	// 			if (PreviousBattErrorFlag == true) { data_global.battchanged = true; }
-	// 			//Check Stall
-	// 			if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
-	// 			// Check Temperature
-	// 			if (Previous_Temp_Alarm_Flag == true) { Update_Temp = true; }
-	// 			// Check Temperature Sensor Flag
-	// 			if (Previous_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
-	// 			// Daisy Chain
-	// 			if (PreviousAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
+			// Check if all Alarm conditions have been cleared
+			if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && CurrentAuxInVal == AuxIn::Inactive)
+			{
+				// Check Battery
+				if (PreviousBattErrorFlag == true) { data_global.battchanged = true; }
+				//Check Stall
+				if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
+				// Check Temperature
+				if (data_global.temp_alarmFlag_previous == true) { Update_Temp = true; }
+				// Check Temperature Sensor Flag
+				if (Previous_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
+				// Daisy Chain
+				if (PreviousAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
 
-	// 			// Set the General Update Flag
-	// 			UpdateIconsFlag = true;
+				// Set the General Update Flag
+				UpdateIconsFlag = true;
 
-	// 			// Set Alarm to None
-	// 			Previous_System_Alarm_State = Current_System_Alarm_State;
-	// 			Current_System_Alarm_State = AlarmState::a_None;
-	// 		}
+				// Set Alarm to None
+				Previous_System_Alarm_State = Current_System_Alarm_State;
+				Current_System_Alarm_State = AlarmState::a_None;
+			}
 
-	// 		// Check if the Snooze Timer has Overflowed
-	// 		else if (SnoozeAlarm_Timer.OverFlowFlag == true)
-	// 		{
+			// Check if the Snooze Timer has Overflowed
+			else if (SnoozeAlarm_Timer.OverFlowFlag == true)
+			{
 
-	// 			// Check Battery
-	// 			if (data_global.batt_error_current == true) { data_global.battchanged = true; }
-	// 			// Check Stall
-	// 			if (Current_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
-	// 			// Temperature Flag
-	// 			if (Current_Temp_Alarm_Flag == true) { Update_Temp = true; }
-	// 			// TEmperature Sensor Flag
-	// 			if (Current_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
-	// 			// Daisy Chain Flag
-	// 			if (CurrentAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
+				// Check Battery
+				if (data_global.batt_error_current == true) { data_global.battchanged = true; }
+				// Check Stall
+				if (data_global.engineStalled_current == true) { UpdateStallFlag = true; }
+				// Temperature Flag
+				if (data_global.temp_alarmFlag_current == true) { Update_Temp = true; }
+				// TEmperature Sensor Flag
+				if (Current_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
+				// Daisy Chain Flag
+				if (CurrentAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
 
-	// 			// Set the General Update Flag
-	// 			UpdateIconsFlag = true;
+				// Set the General Update Flag
+				UpdateIconsFlag = true;
 
-	// 			// Clear the OverFlow Flag and Disable the Timer
-	// 			SnoozeAlarm_Timer.StopTimer();
-	// 			DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
+				// Clear the OverFlow Flag and Disable the Timer
+				SnoozeAlarm_Timer.StopTimer();
+				DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
 
-	// 			// Set Alarm to Full
+				// Set Alarm to Full
 
-	// 			Previous_System_Alarm_State = Current_System_Alarm_State;
-	// 			Current_System_Alarm_State = AlarmState::a_PreAlarm;
-	// 		}
+				Previous_System_Alarm_State = Current_System_Alarm_State;
+				Current_System_Alarm_State = AlarmState::a_PreAlarm;
+			}
 
-	// 		// Check if the counter has changed enough to warrant an update to the screen
-	// 		CurrentSnoozeAlarmCounter = static_cast<int>((millis() - SnoozeAlarmTriggerTime) / 1000);
+			// Check if the counter has changed enough to warrant an update to the screen
+			CurrentSnoozeAlarmCounter = static_cast<int>((millis() - SnoozeAlarmTriggerTime) / 1000);
 
-	// 		if (CurrentSnoozeAlarmCounter != PreviousSnoozeAlarmCounter)
-	// 		{
-	// 			PreviousSnoozeAlarmCounter = CurrentSnoozeAlarmCounter;
+			if (CurrentSnoozeAlarmCounter != PreviousSnoozeAlarmCounter)
+			{
+				PreviousSnoozeAlarmCounter = CurrentSnoozeAlarmCounter;
 
-	// 			// Set General Update Flag
-	// 			UpdateIconsFlag = true;
+				// Set General Update Flag
+				UpdateIconsFlag = true;
 
-	// 			// Update Display Counter
-	// 			DisplaySnoozeAlarmCounter = MaxSnoozeAlarmTime - CurrentSnoozeAlarmCounter;
+				// Update Display Counter
+				DisplaySnoozeAlarmCounter = MaxSnoozeAlarmTime - CurrentSnoozeAlarmCounter;
 
-	// 			// Make sure it doesn't go below zero
-	// 			if (DisplaySnoozeAlarmCounter < 0) { DisplaySnoozeAlarmCounter = 0; }
+				// Make sure it doesn't go below zero
+				if (DisplaySnoozeAlarmCounter < 0) { DisplaySnoozeAlarmCounter = 0; }
 
-	// 			UpdateSnoozeAlarmFlag = true;
-	// 		}
+				UpdateSnoozeAlarmFlag = true;
+			}
 
 
 
-	// 	}
+		}
 	// 	// System is in Full Alarm
 	// 	else if (Current_System_Alarm_State == AlarmState::a_FullAlarm)
 	// 	{
@@ -1610,14 +1611,14 @@ void Process_System_Alarm_States()
 	// 		}
 
 	// 		// Check if all Alarm conditions have been cleared and System Test is not Active. If System test is active then that will be handled by the system test state
-	// 		if (data_global.batt_error_current == false && Current_Eng_Stall_Flag == false && Current_Temp_Alarm_Flag == false && Current_Temp_Sensor_Error_Flag == false && System_Test_Alarm_Active == false && CurrentAuxInVal == AuxIn::Inactive)
+	// 		if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && Current_Temp_Sensor_Error_Flag == false && System_Test_Alarm_Active == false && CurrentAuxInVal == AuxIn::Inactive)
 	// 		{
 	// 			// Check Battery
 	// 			if (PreviousBattErrorFlag == true) { data_global.battchanged = true; }
 	// 			//Check Stall
 	// 			if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
 	// 			// Check Temperature
-	// 			if (Previous_Temp_Alarm_Flag == true) { Update_Temp = true; }
+	// 			if (data_global.temp_alarmFlag_previous == true) { Update_Temp = true; }
 	// 			// Check Temperature Sensor Flag
 	// 			if (Previous_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
 	// 			// Daisy Chain Flag
@@ -1683,14 +1684,14 @@ void Process_System_Alarm_States()
 	// 		}
 
 	// 		// Check Battery, Stall, Temp Alarm, Aux
-	// 		if (data_global.batt_error_current == true || Current_Eng_Stall_Flag == true || Current_Temp_Alarm_Flag == true || Current_Temp_Sensor_Error_Flag == true || CurrentAuxInVal == AuxIn::Active)
+	// 		if (data_global.batt_error_current == true || data_global.engineStalled_current == true || data_global.temp_alarmFlag_current == true || Current_Temp_Sensor_Error_Flag == true || CurrentAuxInVal == AuxIn::Active)
 	// 		{
 	// 			// Check Battery
 	// 			if (PreviousBattErrorFlag == true) { data_global.battchanged = true; }
 	// 			// Check Stall
 	// 			if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
 	// 			// Check Temp
-	// 			if (Previous_Temp_Alarm_Flag == true) { Update_Temp = true; }
+	// 			if (data_global.temp_alarmFlag_previous == true) { Update_Temp = true; }
 	// 			// Check Temperature Sensor Flag
 	// 			if (Previous_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
 	// 			// DaisyChain Flag
@@ -1765,8 +1766,8 @@ void Reset_System_Alarm_State()
 
 	// // Clear any update flags
 	// data_global.batt_error_current = false;
-	// Current_Eng_Stall_Flag = false;
-	// Current_Temp_Alarm_Flag = false;
+	// data_global.engineStalled_current = false;
+	// data_global.temp_alarmFlag_current = false;
 	// Current_Temp_Sensor_Error_Flag = false;
 	// CurrentAuxInVal = AuxIn::Inactive;
 
@@ -2378,7 +2379,7 @@ float ConvertFtoC(float F)
 
 void ui_update_acecon() {
 
-	bool redrawFlag = false;
+	data_global = vim_load();
 
     if (data_global.temp_changed || data_global.units_changed){
         ////MONITOR.println("UI: Temp Values Need Updating");
@@ -2433,6 +2434,7 @@ void ui_update_acecon() {
             data_global.temp_changed = false;
         }
 
+		
         
     }
 
@@ -2568,7 +2570,7 @@ void ui_update_acecon() {
     // Redraw Screen
     if(redrawFlag){
         //MONITOR.println("Redrawing Screen");
-
+		vim_store(data_global);
         lv_scr_load(lv_scr_act());
         redrawFlag = false;
     } 
@@ -3148,6 +3150,7 @@ static void menu_AlarmColdSetDown_handler(lv_event_t * e)
 
 static void menu_TempUnits_handler(lv_event_t * e)
 {
+	data_global = vim_load();
 
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * obj = lv_event_get_target(e);
@@ -3188,11 +3191,14 @@ static void menu_TempUnits_handler(lv_event_t * e)
 
 static void menu_TempAveraging_handler(lv_event_t * e)
 {
-    lv_event_code_t code = lv_event_get_code(e);
+    data_global = vim_load();
+
+	lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_VALUE_CHANGED) {
         //MONITOR.print("Temp Averaging Changed To: ");
         systemsettings_previous.TempAveragingEnabled = systemsettings_current.TempAveragingEnabled;
+
 
         if (lv_obj_get_state(obj) & LV_STATE_CHECKED){
             //MONITOR.println("True");
@@ -3202,7 +3208,10 @@ static void menu_TempAveraging_handler(lv_event_t * e)
             systemsettings_current.TempAveragingEnabled = false;
         }
             
-    data_global.units_changed = true;
+    data_global.temp_changed = true;
+
+	vim_store(data_global);
+
     ui_update_acecon();
 
     }
@@ -3379,6 +3388,7 @@ void process_vim(const char* incoming, void* state) {
 				if (data_global.k9_door_open_previous != data_global.k9_door_open_current){
 					////MONITOR.println("Door Value Changed");
 					data_global.k9_door_changed = true;
+					data_global.updateIcons = true;
 				}
 				
 				//================================================== Temperature  =========================================*/
@@ -3397,6 +3407,8 @@ void process_vim(const char* incoming, void* state) {
 					
 					data_global.leftTempError = true;
 					data_global.leftTempSign = data_global.leftTempSign;
+					data_global.temp_errorFlag_previous = data_global.temp_errorFlag_current
+					data_global.temp_errorFlag_current = true;
 
 				}
 				else 
@@ -3433,6 +3445,7 @@ void process_vim(const char* incoming, void* state) {
 					
 					data_global.rightTempError = true;
 					data_global.rightTempSign = data_global.rightTempSign;
+					data_global.temp_errorFlag_current = true;
 
 				}
 				else 
@@ -3481,6 +3494,7 @@ void process_vim(const char* incoming, void* state) {
 
 				if (data_global.leftTemp_previous != data_global.leftTemp_current || data_global.rightTemp_previous != data_global.rightTemp_current){
 					data_global.temp_changed = true;
+					data_global.updateIcons = true;
 				}
 
 
@@ -3548,6 +3562,7 @@ void process_vim(const char* incoming, void* state) {
 
 				if (data_global.batt_error_previous != data_global.batt_error_current){
 					data_global.battchanged = true;
+					data_global.updateIcons = true;
 				}
 
 
@@ -3590,6 +3605,7 @@ void process_vim(const char* incoming, void* state) {
 				if (data_global.engineStalled_previous != data_global.engineStalled_current){
 					////MONITOR.println("Engine Stalled Valued Changed ");
 					data_global.engine_changed = true;
+					data_global.updateIcons = true;
 				}
 
 
@@ -3624,6 +3640,7 @@ void process_vim(const char* incoming, void* state) {
 
 				if (data_global.Aux1Input_previous!=data_global.Aux1Input_current || data_global.Aux2Input_previous!=data_global.Aux2Input_current){
 					data_global.aux_changed = true;
+					data_global.updateIcons = true;
 				}
 				
 				

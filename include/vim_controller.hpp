@@ -35,8 +35,10 @@ struct vim_data {
     float avgTemp;
     bool temp_changed;
     bool units_changed;
-	bool temp_alarmFlag;
-	bool temp_errorFlag;
+	bool temp_alarmFlag_current;
+    bool temp_alarmFlag_previous;
+	bool temp_errorFlag_current;
+    bool temp_errorFlag_previous;
 
     // Battery Variables
     BatteryThreshold BatterySetting = BatteryThreshold::B_100;
@@ -65,6 +67,9 @@ struct vim_data {
     bool Aux2Input_previous;
     bool Aux2Input_current;
     bool aux_changed;
+
+    // General Variables
+    bool updateIcons;
 
 };
 /// @brief The VIM callback. Your function should follow this signature
