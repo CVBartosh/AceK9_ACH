@@ -13,13 +13,17 @@
 #include <stddef.h>
 
 enum struct STATUS_CODE : int32_t {
+    FOTA_FW_ABSENT = -5,
     UNKOWNDATAFROMSERVER = -4,
     UNSUPPORTEDTYPEININIT = -3,
     XBEE_NOT_INTIALIZED = -2,
     INVALID_COMMAND = -1,
     SUCCESS = 0,
     XBEE_INITIALIZED = 1,
-    XBEE_CELL_CONNECTED = 2
+    XBEE_CELL_CONNECTED = 2,
+    FOTA_CHECK_FW = 3,
+    FOTA_BEGIN = 4,
+    FOTA_DELETE_FILE = 5\
 };
 
 enum struct COMMAND_ID : int32_t {
@@ -34,6 +38,7 @@ enum struct COMMAND_ID : int32_t {
     COMMAND,
     SUBSCRIBE,
     UPDATE,
+    FOTA,
     INIT = 255
 };
 enum ACE_BOOL : uint32_t {
@@ -192,6 +197,14 @@ struct update_packet
     // uint32_t crc; (prepended to packet)      // CRC | 4 bytes | 32-bit unsigned word  | Indicates the CRC-32 value for the packet
     uint32_t size; // the number of significant bytes in the data field
     uint8_t data[1024]; // preferably 8192
+};
+
+// FOTA Packet is used to communicate the FOTA process steps
+struct fota_packet
+{
+    constexpr static const COMMAND_ID cmd_ID = COMMAND_ID::FOTA;
+    // uint32_t crc; (prepended to packet)      // CRC | 4 bytes | 32-bit unsigned word  | Indicates the CRC-32 value for the packet
+    STATUS_CODE fotaStatus;
 };
 
 #endif // INTERFACE_H
