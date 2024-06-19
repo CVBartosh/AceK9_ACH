@@ -23,7 +23,7 @@ enum struct STATUS_CODE : int32_t {
     XBEE_CELL_CONNECTED = 2,
     FOTA_CHECK_FW = 3,
     FOTA_BEGIN = 4,
-    FOTA_DELETE_FILE = 5\
+    FOTA_DELETE_FILE = 5
 };
 
 enum struct COMMAND_ID : int32_t {
