@@ -1514,21 +1514,21 @@ void Process_System_Alarm_States()
 			}
 
 			// Check if all Alarm conditions have been cleared
-			if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && CurrentAuxInVal == AuxIn::Inactive)
+			if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && (data_global.Aux1Input_current == false || data_global.Aux2Input_current == false))
 			{
 				// Check Battery
-				if (PreviousBattErrorFlag == true) { data_global.battchanged = true; }
+				if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
 				//Check Stall
-				if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
+				if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
 				// Check Temperature
-				if (data_global.temp_alarmFlag_previous == true) { Update_Temp = true; }
+				if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
 				// Check Temperature Sensor Flag
-				if (Previous_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
+				if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
 				// Daisy Chain
-				if (PreviousAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
+				if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
 
 				// Set the General Update Flag
-				UpdateIconsFlag = true;
+				data_global.updateIcons = true;
 
 				// Set Alarm to None
 				Previous_System_Alarm_State = Current_System_Alarm_State;
@@ -1542,16 +1542,16 @@ void Process_System_Alarm_States()
 				// Check Battery
 				if (data_global.batt_error_current == true) { data_global.battchanged = true; }
 				// Check Stall
-				if (data_global.engineStalled_current == true) { UpdateStallFlag = true; }
+				if (data_global.engineStalled_current == true) { data_global.engine_changed = true; }
 				// Temperature Flag
-				if (data_global.temp_alarmFlag_current == true) { Update_Temp = true; }
+				if (data_global.temp_alarmFlag_current == true) { data_global.temp_changed = true; }
 				// TEmperature Sensor Flag
-				if (Current_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
+				if (data_global.temp_errorFlag_current == true) { data_global.temp_changed = true; }
 				// Daisy Chain Flag
-				if (CurrentAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
+				if (data_global.Aux1Input_current == true || data_global.Aux2Input_current == true) { data_global.aux_changed = true; }
 
 				// Set the General Update Flag
-				UpdateIconsFlag = true;
+				data_global.updateIcons = true;
 
 				// Clear the OverFlow Flag and Disable the Timer
 				SnoozeAlarm_Timer.StopTimer();
@@ -1571,7 +1571,7 @@ void Process_System_Alarm_States()
 				PreviousSnoozeAlarmCounter = CurrentSnoozeAlarmCounter;
 
 				// Set General Update Flag
-				UpdateIconsFlag = true;
+				data_global.updateIcons = true;
 
 				// Update Display Counter
 				DisplaySnoozeAlarmCounter = MaxSnoozeAlarmTime - CurrentSnoozeAlarmCounter;
@@ -1614,18 +1614,18 @@ void Process_System_Alarm_States()
 	// 		if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && Current_Temp_Sensor_Error_Flag == false && System_Test_Alarm_Active == false && CurrentAuxInVal == AuxIn::Inactive)
 	// 		{
 	// 			// Check Battery
-	// 			if (PreviousBattErrorFlag == true) { data_global.battchanged = true; }
+	// 			if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
 	// 			//Check Stall
-	// 			if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
+	// 			if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
 	// 			// Check Temperature
-	// 			if (data_global.temp_alarmFlag_previous == true) { Update_Temp = true; }
+	// 			if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
 	// 			// Check Temperature Sensor Flag
-	// 			if (Previous_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
+	// 			if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
 	// 			// Daisy Chain Flag
 	// 			if (PreviousAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
 
 	// 			// Set the General Update Flag
-	// 			UpdateIconsFlag = true;
+	// 			data_global.updateIcons = true;
 
 	// 			// Disable Timer and Clear OverFlow Flag
 	// 			SystemAlarm_Timer.StopTimer();
@@ -1645,7 +1645,7 @@ void Process_System_Alarm_States()
 	// 			// Set Flag so display gets updated
 	// 			UpdateFullAlarmFlag = true;
 	// 			// Set General Update Flag
-	// 			UpdateIconsFlag = true;
+	// 			data_global.updateIcons = true;
 
 	// 		}
 
@@ -1687,19 +1687,19 @@ void Process_System_Alarm_States()
 	// 		if (data_global.batt_error_current == true || data_global.engineStalled_current == true || data_global.temp_alarmFlag_current == true || Current_Temp_Sensor_Error_Flag == true || CurrentAuxInVal == AuxIn::Active)
 	// 		{
 	// 			// Check Battery
-	// 			if (PreviousBattErrorFlag == true) { data_global.battchanged = true; }
+	// 			if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
 	// 			// Check Stall
-	// 			if (Previous_Eng_Stall_Flag == true) { UpdateStallFlag = true; }
+	// 			if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
 	// 			// Check Temp
-	// 			if (data_global.temp_alarmFlag_previous == true) { Update_Temp = true; }
+	// 			if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
 	// 			// Check Temperature Sensor Flag
-	// 			if (Previous_Temp_Sensor_Error_Flag == true) { Update_Temp = true; }
+	// 			if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
 	// 			// DaisyChain Flag
 	// 			if (PreviousAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
 
 
 	// 			// Set the General Update Flag
-	// 			UpdateIconsFlag = true;
+	// 			data_global.updateIcons = true;
 
 
 	// 			if (_EEAUTOSNOOZE == true) { //MONITOR.println("AUTOSNOOZE TRUE"); }
@@ -1813,7 +1813,7 @@ void Check_IBoxPopped()
 	// 			}
 
 
-	// 			UpdateIconsFlag = true;
+	// 			data_global.updateIcons = true;
 	// 			UpdateDoorFlag = true;
 
 	// 			// Start Timer
@@ -1842,7 +1842,7 @@ void Check_IBoxPopped()
 
 	// 		Current_DoorPopTrigger = DoorPopTrigger::dt_None;
 	// 		CurrentDoorPopCondition = DoorPopCondition::dc_Unpopped;
-	// 		UpdateIconsFlag = true;
+	// 		data_global.updateIcons = true;
 	// 		UpdateDoorFlag = true;
 
 	// 	}
@@ -3407,7 +3407,7 @@ void process_vim(const char* incoming, void* state) {
 					
 					data_global.leftTempError = true;
 					data_global.leftTempSign = data_global.leftTempSign;
-					data_global.temp_errorFlag_previous = data_global.temp_errorFlag_current
+					data_global.temp_errorFlag_previous = data_global.temp_errorFlag_current;
 					data_global.temp_errorFlag_current = true;
 
 				}
