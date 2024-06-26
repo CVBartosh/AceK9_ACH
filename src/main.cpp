@@ -1355,7 +1355,6 @@ void set_ALM(bool value)
     digitalWrite(ACECON_ALM_OUT,value);
 }
 
-
 void Process_System_Alarm_States()
 {
 	// Make Sure Alarms are enabled (this is state dependant)
@@ -1585,153 +1584,153 @@ void Process_System_Alarm_States()
 
 
 		}
-	// 	// System is in Full Alarm
-	// 	else if (Current_System_Alarm_State == AlarmState::a_FullAlarm)
-	// 	{
-	// 		if (Previous_System_Alarm_State != AlarmState::a_FullAlarm)
-	// 		{
-	// 			//MONITOR.println("Alarm set to FullAlarm");
+		// System is in Full Alarm
+		else if (Current_System_Alarm_State == AlarmState::a_FullAlarm)
+		{
+			if (Previous_System_Alarm_State != AlarmState::a_FullAlarm)
+			{
+				//MONITOR.println("Alarm set to FullAlarm");
 
-	// 			// Emit Alarm Pulse
-	// 			Set_SoundPulse(PulseProfile::pp_SystemTest);
+				// Emit Alarm Pulse
+				//Set_SoundPulse(PulseProfile::pp_SystemTest);
 
-	// 			// Send HPT(ALM) Signal
-	// 			digitalWrite(ACECON_ALM, HIGH);
+				// Send HPT(ALM) Signal
+				set_ALM(HIGH);
 
-	// 			// Clear any previous Counters
-	// 			PreviousFullAlarmCounter = 0;
-	// 			CurrentFullAlarmCounter = 0;
+				// Clear any previous Counters
+				PreviousFullAlarmCounter = 0;
+				CurrentFullAlarmCounter = 0;
 
-	// 			// Log the trigger time
-	// 			FullAlarmTriggerTime = millis();
+				// Log the trigger time
+				FullAlarmTriggerTime = millis();
 
-	// 			// Set Prev State
-	// 			Previous_System_Alarm_State = Current_System_Alarm_State;
+				// Set Prev State
+				Previous_System_Alarm_State = Current_System_Alarm_State;
 
-	// 		}
+			}
 
-	// 		// Check if all Alarm conditions have been cleared and System Test is not Active. If System test is active then that will be handled by the system test state
-	// 		if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && Current_Temp_Sensor_Error_Flag == false && System_Test_Alarm_Active == false && CurrentAuxInVal == AuxIn::Inactive)
-	// 		{
-	// 			// Check Battery
-	// 			if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
-	// 			//Check Stall
-	// 			if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
-	// 			// Check Temperature
-	// 			if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
-	// 			// Check Temperature Sensor Flag
-	// 			if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
-	// 			// Daisy Chain Flag
-	// 			if (PreviousAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
+			// Check if all Alarm conditions have been cleared and System Test is not Active. If System test is active then that will be handled by the system test state
+			if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && System_Test_Alarm_Active == false && (data_global.Aux1Input_current == false || data_global.Aux2Input_current == false))
+			{
+				// Check Battery
+				if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
+				//Check Stall
+				if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
+				// Check Temperature
+				if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
+				// Check Temperature Sensor Flag
+				if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
+				// Daisy Chain Flag
+				if (data_global.Aux1Input_current == true || data_global.Aux2Input_current == true) { data_global.aux_changed = true; }
 
-	// 			// Set the General Update Flag
-	// 			data_global.updateIcons = true;
+				// Set the General Update Flag
+				data_global.updateIcons = true;
 
-	// 			// Disable Timer and Clear OverFlow Flag
-	// 			SystemAlarm_Timer.StopTimer();
+				// Disable Timer and Clear OverFlow Flag
+				SystemAlarm_Timer.StopTimer();
 
-	// 			// Set Alarm to None
-	// 			Previous_System_Alarm_State = Current_System_Alarm_State;
-	// 			Current_System_Alarm_State = AlarmState::a_None;
-	// 		}
+				// Set Alarm to None
+				Previous_System_Alarm_State = Current_System_Alarm_State;
+				Current_System_Alarm_State = AlarmState::a_None;
+			}
 
-	// 		// Get Count
-	// 		PreviousFullAlarmCounter = CurrentFullAlarmCounter;
-	// 		CurrentFullAlarmCounter = static_cast<long>((millis() - FullAlarmTriggerTime) / 1000);
+			// Get Count
+			PreviousFullAlarmCounter = CurrentFullAlarmCounter;
+			CurrentFullAlarmCounter = static_cast<long>((millis() - FullAlarmTriggerTime) / 1000);
 
-	// 		if (CurrentFullAlarmCounter != PreviousFullAlarmCounter)
-	// 		{
+			if (CurrentFullAlarmCounter != PreviousFullAlarmCounter)
+			{
 
-	// 			// Set Flag so display gets updated
-	// 			UpdateFullAlarmFlag = true;
-	// 			// Set General Update Flag
-	// 			data_global.updateIcons = true;
+				// Set Flag so display gets updated
+				UpdateFullAlarmFlag = true;
+				// Set General Update Flag
+				data_global.updateIcons = true;
 
-	// 		}
+			}
 
-	// 	}
-	// 	// System alarm is current off
-	// 	else if (Current_System_Alarm_State == AlarmState::a_None)
-	// 	{
-	// 		if (Previous_System_Alarm_State != AlarmState::a_None)
-	// 		{
-	// 			//MONITOR.println("Alarm set to None");
+		}
+		// System alarm is current off
+		else if (Current_System_Alarm_State == AlarmState::a_None)
+		{
+			if (Previous_System_Alarm_State != AlarmState::a_None)
+			{
+				//MONITOR.println("Alarm set to None");
 
-	// 			// Send HPT(ALM) Signal
-	// 			digitalWrite(ACECON_ALM, LOW);
+				// Send HPT(ALM) Signal
+				set_ALM(LOW);
 
-	// 			// Set No Sound Pulse
-	// 			Set_SoundPulse(PulseProfile::pp_NoSound);
+				// Set No Sound Pulse
+				//Set_SoundPulse(PulseProfile::pp_NoSound);
 
-	// 			// Clear the Pre-Alarm, Snooze and Full Alarm Variables and Timers
-	// 			PreviousPreAlarmCounter = 0;
-	// 			CurrentPreAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
-	// 			DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
-	// 			PreviousSnoozeAlarmCounter = 0;
-	// 			CurrentSnoozeAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
-	// 			DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
-	// 			PreviousFullAlarmCounter = 0;
-	// 			CurrentFullAlarmCounter = 0;
+				// Clear the Pre-Alarm, Snooze and Full Alarm Variables and Timers
+				PreviousPreAlarmCounter = 0;
+				CurrentPreAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
+				DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
+				PreviousSnoozeAlarmCounter = 0;
+				CurrentSnoozeAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
+				DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
+				PreviousFullAlarmCounter = 0;
+				CurrentFullAlarmCounter = 0;
 
-	// 			// Disable Timers
-	// 			PreAlarmNotification_Timer.StopTimer();
-	// 			SystemAlarm_Timer.StopTimer();
-	// 			SnoozeAlarm_Timer.StopTimer();
+				// Disable Timers
+				PreAlarmNotification_Timer.StopTimer();
+				SystemAlarm_Timer.StopTimer();
+				SnoozeAlarm_Timer.StopTimer();
 
-	// 			// Set Prev State
-	// 			Previous_System_Alarm_State = Current_System_Alarm_State;
+				// Set Prev State
+				Previous_System_Alarm_State = Current_System_Alarm_State;
 
-	// 		}
+			}
 
-	// 		// Check Battery, Stall, Temp Alarm, Aux
-	// 		if (data_global.batt_error_current == true || data_global.engineStalled_current == true || data_global.temp_alarmFlag_current == true || Current_Temp_Sensor_Error_Flag == true || CurrentAuxInVal == AuxIn::Active)
-	// 		{
-	// 			// Check Battery
-	// 			if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
-	// 			// Check Stall
-	// 			if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
-	// 			// Check Temp
-	// 			if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
-	// 			// Check Temperature Sensor Flag
-	// 			if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
-	// 			// DaisyChain Flag
-	// 			if (PreviousAuxInVal == AuxIn::Active) { UpdateAuxIn = true; }
-
-
-	// 			// Set the General Update Flag
-	// 			data_global.updateIcons = true;
+			// Check Battery, Stall, Temp Alarm, Aux
+			if (data_global.batt_error_current == true || data_global.engineStalled_current == true || data_global.temp_alarmFlag_current == true || data_global.temp_errorFlag_current == true || data_global.Aux1Input_current == true || data_global.Aux2Input_current == true)
+			{
+				// Check Battery
+				if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
+				// Check Stall
+				if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
+				// Check Temp
+				if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
+				// Check Temperature Sensor Flag
+				if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
+				// DaisyChain Flag
+				if (data_global.Aux1Input_current == true || data_global.Aux2Input_current == true) { data_global.aux_changed = true; }
 
 
-	// 			if (_EEAUTOSNOOZE == true) { //MONITOR.println("AUTOSNOOZE TRUE"); }
-	// 			if (InitialPowerUpFlag == true) { //MONITOR.println("POWERUPFLAG TRUE"); }
+				// Set the General Update Flag
+				data_global.updateIcons = true;
 
 
-	// 			// AUTOSNOOZE FUNCTIONALITY HERE
-	// 			// If the system has just woken up then go to snooze
-	// 			if (InitialPowerUpFlag == true && _EEAUTOSNOOZE == true)
-	// 			{
-	// 				//MONITOR.println("AutoSnooze Triggered");
-
-	// 				// Go to Snooze Alarm State
-	// 				Previous_System_Alarm_State = Current_System_Alarm_State;
-	// 				Current_System_Alarm_State = AlarmState::a_Snooze;
+				if (systemsettings_current.AutoSnoozeEnabled == true) { MONITOR.println("AUTOSNOOZE TRUE"); }
+				if (systemsettings_current.InitialPowerUpFlag == true) { MONITOR.println("POWERUPFLAG TRUE"); }
 
 
-	// 			}
-	// 			else
-	// 			{
+				// AUTOSNOOZE FUNCTIONALITY HERE
+				// If the system has just woken up then go to snooze
+				if (systemsettings_current.InitialPowerUpFlag == true && systemsettings_current.AutoSnoozeEnabled == true)
+				{
+					//MONITOR.println("AutoSnooze Triggered");
 
-	// 				// Set Alarm to Pre ALarm
-	// 				Previous_System_Alarm_State = Current_System_Alarm_State;
-	// 				Current_System_Alarm_State = AlarmState::a_PreAlarm;
-
-	// 			}
+					// Go to Snooze Alarm State
+					Previous_System_Alarm_State = Current_System_Alarm_State;
+					Current_System_Alarm_State = AlarmState::a_Snooze;
 
 
+				}
+				else
+				{
 
-	// 		}
+					// Set Alarm to Pre ALarm
+					Previous_System_Alarm_State = Current_System_Alarm_State;
+					Current_System_Alarm_State = AlarmState::a_PreAlarm;
 
-	// 	}
+				}
+
+
+
+			}
+
+		}
 
 
 	}
@@ -1740,39 +1739,40 @@ void Process_System_Alarm_States()
 
 void Reset_System_Alarm_State()
 {
-	// Previous_System_Alarm_State = AlarmState::a_None;
-	// Current_System_Alarm_State = AlarmState::a_None;
+	Previous_System_Alarm_State = AlarmState::a_None;
+	Current_System_Alarm_State = AlarmState::a_None;
 
-	// //MONITOR.println("Alarm set to None");
-	// Set_SoundPulse(PulseProfile::pp_NoSound);
+	//MONITOR.println("Alarm set to None");
+	//Set_SoundPulse(PulseProfile::pp_NoSound);
 
-	// // Clear HPT(ALM) Signal
-	// digitalWrite(ACECON_ALM, LOW);
+	// Clear HPT(ALM) Signal
+	set_ALM(LOW);
 
-	// // Clear the Pre-Alarm, Snooze and Full Alarm Variables and Timers
-	// PreviousPreAlarmCounter = 0;
-	// CurrentPreAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
-	// DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
-	// PreviousSnoozeAlarmCounter = 0;
-	// CurrentSnoozeAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
-	// DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
-	// PreviousFullAlarmCounter = 0;
-	// CurrentFullAlarmCounter = 0;
+	// Clear the Pre-Alarm, Snooze and Full Alarm Variables and Timers
+	PreviousPreAlarmCounter = 0;
+	CurrentPreAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
+	DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
+	PreviousSnoozeAlarmCounter = 0;
+	CurrentSnoozeAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
+	DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
+	PreviousFullAlarmCounter = 0;
+	CurrentFullAlarmCounter = 0;
 
-	// // Disable Timers
-	// PreAlarmNotification_Timer.StopTimer();
-	// SystemAlarm_Timer.StopTimer();
-	// SnoozeAlarm_Timer.StopTimer();
+	// Disable Timers
+	PreAlarmNotification_Timer.StopTimer();
+	SystemAlarm_Timer.StopTimer();
+	SnoozeAlarm_Timer.StopTimer();
 
-	// // Clear any update flags
-	// data_global.batt_error_current = false;
-	// data_global.engineStalled_current = false;
-	// data_global.temp_alarmFlag_current = false;
-	// Current_Temp_Sensor_Error_Flag = false;
-	// CurrentAuxInVal = AuxIn::Inactive;
+	// Clear any update flags
+	data_global.batt_error_current = false;
+	data_global.engineStalled_current = false;
+	data_global.temp_alarmFlag_current = false;
+	data_global.temp_errorFlag_current = false;
+	data_global.Aux1Input_current = false;
+	data_global.Aux2Input_current == false;
 
-	// // Set No Sound Pulse
-	// Set_SoundPulse(PulseProfile::pp_NoSound);
+	// Set No Sound Pulse
+	//Set_SoundPulse(PulseProfile::pp_NoSound);
 
 }
 
@@ -2577,235 +2577,6 @@ void ui_update_acecon() {
        
 }
 
-void acedata_parse_temperature(String str){
-       
-    // tempvalues_previous = tempvalues_current;
-    
-    // //================================================== Left Temp =========================================*/
-    // ////MONITOR.printf("Left Temp Sign: %c\n",str.charAt(ACEDATA_Temp1_Sign_POS));
-    // acedata_current.leftTempSign = (str.charAt(ACEDATA_Temp1_Sign_POS));
-    
-    // // Check for Error First
-    // if (acedata_current.leftTempSign == TempErrorGeneral){
-                
-    //     if (str.charAt(ACEDATA_Temp1_10X_POS) == TempErrorOpen || str.charAt(ACEDATA_Temp1_10X_POS) == TempErrorSho){
-    //         acedata_current.leftTempSign = str.charAt(ACEDATA_Temp1_10X_POS);
-    //     }
-        
-    //     data.leftTempError = true;
-    //     data.leftTempSign = acedata_current.leftTempSign;
-
-    // }
-    // else 
-    // {
-        
-    //     // Parse Temperature Magnitude	
-    //     String ia =str.substring(ACEDATA_Temp1_1000X_POS,ACEDATA_Temp1_1X_POS+1);
-       
-    //     acedata_current.leftTemp = ((float)atoi(ia.c_str()))/10.0f;
-        
-    //     if(acedata_current.leftTempSign == TempSignNeg){
-    //         acedata_current.leftTemp = acedata_current.leftTemp * -1;
-    //     }
-
-    //     data.leftTemp_current= acedata_current.leftTemp;
-
-    //     data.leftTempError = false;
-
-    // }
-
-    // // //MONITOR.print("Left Temp Value: ");
-    // // //MONITOR.println(data.leftTemp);
-
-    // //================================================== Right Temp =========================================*/
-    // ////MONITOR.printf("Right Temp Sign: %c\n",str.charAt(ACEDATA_Temp2_Sign_POS));
-    // acedata_current.rightTempSign = (str.charAt(ACEDATA_Temp2_Sign_POS));
-    
-    // // Check for Error First
-    // if (acedata_current.rightTempSign == TempErrorGeneral){
-                
-    //     if (str.charAt(ACEDATA_Temp2_10X_POS) == TempErrorOpen || str.charAt(ACEDATA_Temp2_10X_POS) == TempErrorSho){
-    //         acedata_current.rightTempSign = str.charAt(ACEDATA_Temp2_10X_POS);
-    //     }
-        
-    //     data.rightTempError = true;
-    //     data.rightTempSign = acedata_current.rightTempSign;
-
-    // }
-    // else 
-    // {
-        
-    //     // Parse Temperature Magnitude	
-    //     String ia =str.substring(ACEDATA_Temp2_1000X_POS,ACEDATA_Temp2_1X_POS+1);
-       
-    //     acedata_current.rightTemp = ((float)atoi(ia.c_str()))/10.0f;
-        
-    //     if(acedata_current.rightTempSign == TempSignNeg){
-    //         acedata_current.rightTemp = acedata_current.rightTemp * -1;
-    //     }
-
-    //     data.rightTemp = acedata_current.rightTemp;
-
-    //     data.rightTempError = false;
-
-    // }
-
-    // ////MONITOR.print("Right Temp Value: ");
-    // ////MONITOR.println(data.rightTemp);
-
-    // //================================================== Average Temp =========================================*/
-
-    // // If Both Sensors have not returned an error
-    // if (data.leftTempError == false && data.rightTempError == false){
-        
-    //     data.avgTemp = (data.leftTemp_current+ data.rightTemp)/2;
-    // }
-    // else
-    // {
-    //     // If a single sensor is failed, used the working sensor value as the average
-    //     if (data.leftTempError == true && data.rightTempError == false)
-    //     {
-    //         data.avgTemp = data.rightTemp;
-    //     }
-    //     else if (data.leftTempError == false && data.rightTempError == true)
-    //     {
-    //         data.avgTemp = data.leftTemp;
-    //     }
-    // }
-
-    // ////MONITOR.print("Average Temp Value: ");
-    // ////MONITOR.println(data.avgTemp);
-
-    // if (tempvalues_previous.leftTemp!=data.leftTemp_current|| tempvalues_previous.rightTemp!=data.rightTemp){
-    //     data.valueChanged = true;
-    // }
-
-}
-
-void acedata_parse_battery(String str){
-       
-    // battvalues_previous = battvalues_current;
-    
-    // //================================================== Battery Value =========================================*/
-    	
-    //     String ia =str.substring(ACEDATA_Batt_100X_POS,ACEDATA_Batt_1X_POS+1);
-       
-    //     acedata_current.batteryVoltage = ((float)atoi(ia.c_str()))/10.0f;
-    
-    // battvalues_current.voltage = acedata_current.batteryVoltage;
-
-    // // //MONITOR.print("Battery Voltage: ");
-    // // //MONITOR.println(battvalues_current.voltage);
-
-    // // Check if the Batt Voltage is out of range
-	// if (acedata_current.batteryVoltage < battvalues_current.voltage/10)
-    // {
-    //     BadBatteryCounter++;
-    //     if (BadBatteryCounter > MaxBadBattValCounter)
-    //     {
-    //         battvalues_current.error = true;
-    //     }
-    // }
-    // else
-    // {
-    //     BadBatteryCounter = 0;
-    //     battvalues_current.error = false;
-    // }
-
-    // if (battvalues_previous.error != battvalues_current.error){
-    //     battvalues_current.valueChanged = true;
-    // }
-
-}
-
-void acedata_parse_engine_stall(String str){
-
-    // enginevalues_previous = enginevalues_current;
-
-    // if (str.charAt(ACEDATA_Stall_Status_POS)=='0'){
-    //     ////MONITOR.println("Engine Stalled");
-    //     acedata_current.engineStalled = true;
-    // }else{
-    //     ////MONITOR.println("Engine NOT Stalled");
-    //     acedata_current.engineStalled = false;
-    // }
-
-    // String ia =str.substring(ACEDATA_Stall_Count_10X_POS,ACEDATA_Stall_Count_1X_POS+1);
-       
-    //     acedata_current.EngineStallCount = ((float)atoi(ia.c_str()))/10.0f;
-    //     enginevalues_current.engineStallCount = acedata_current.EngineStallCount;
-    
-    // ////MONITOR.print("Engine Stall Count:");
-    // ////MONITOR.println(enginevalues_current.engineStallCount);
-
-
-    // if (str.charAt(ACEDATA_Stall_Sensor_Present_POS) =='A'){
-    //     ////MONITOR.println("Engine Stall Sensor Present");
-    //     acedata_current.engineStallSensorPresent = true;
-    // }else{
-    //     ////MONITOR.println("Engine Stall Sensor Not Present");
-    //     acedata_current.engineStallSensorPresent = false;
-    // }
-
-    // enginevalues_current.engineStallSensorPresent = acedata_current.engineStallSensorPresent;
-
-    // if (enginevalues_current.engineStallCount >= EngineStallThreshold){
-    //     ////MONITOR.println("Stall Condition Achieved");
-    //     enginevalues_current.engineStalled = true;
-        
-    // }else{
-    //     enginevalues_current.engineStalled = false;
-    // }
-
-    // if (enginevalues_previous.engineStalled != enginevalues_current.engineStalled){
-    //     ////MONITOR.println("Engine Stalled Valued Changed ");
-    //     enginevalues_current.valueChanged = true;
-    // }
-
-
-}
-
-void acedata_parse_aux(String str){
-    
-    // auxvalues_previous = auxvalues_current;
-
-    // if (str.charAt(ACEDATA_Aux1_Input_POS)=='1'){
-    //     acedata_current.Aux1Input = true;
-    // }else{
-    //     acedata_current.Aux1Input = false;
-    // }
-    // auxvalues_current.aux1Active = acedata_current.Aux1Input;
-
-    // if (str.charAt(ACEDATA_Aux2_Input_POS)=='1'){
-    //     acedata_current.Aux2Input = true;
-    // }else{
-    //     acedata_current.Aux2Input = false;
-    // }
-    // auxvalues_current.aux2Active = acedata_current.Aux2Input;
-
-}
-
-void acedata_parse_k9door(String str){
-    
-    // doorvalues_previous = doorvalues_current;
-
-    // if (str.charAt(ACEDATA_K9Door_POS)=='1'){
-    //     ////MONITOR.println("Door Open");
-    //     acedata_current.K9DoorOpen = true;
-	// 	doorvalues_current.doorOpen = DOOROPENState::Open;
-    // }else{
-    //     ////MONITOR.println("Door Closed");
-    //     acedata_current.K9DoorOpen = false;
-	// 	doorvalues_current.doorOpen = DOOROPENState::Closed;
-    // }
-    
-    // if (doorvalues_previous.doorOpen != doorvalues_current.doorOpen){
-    //     ////MONITOR.println("Door Value Changed");
-    //     doorvalues_current.valueChanged = true;
-    // }
-
-}
-
 static void ui_switch_handler(lv_event_t * e)
 {
     
@@ -3326,19 +3097,6 @@ static void menu_RestoreDefaults_handler(lv_event_t * e)
         update_menu_settings();
        
     }
-
-}
-
-void acedata_parse_serialnumber(String str){
-        
-    // systemsettings_current.VIMSerialNumber = str.substring(ACEDATA_VIM_SN_POS,ACEDATA_VIM_SN_POS+ACEDATA_VIM_SN_LENGTH);
-
-    //     ////MONITOR.println("VIM SN:" + systemsettings_current.VIMSerialNumber);
-    // if (systemsettings_previous.VIMSerialNumber != systemsettings_current.VIMSerialNumber){
-    //     systemsettings_previous.VIMSerialNumber = systemsettings_current.VIMSerialNumber;
-    //     ////MONITOR.println("VIM SN Changed:");
-    //     lv_label_set_text(ui_LabelIntelaBoxSNValue,systemsettings_current.VIMSerialNumber.c_str());
-    // }
 
 }
 
@@ -4890,7 +4648,12 @@ void Process_State_Machine(){
 }
 
 
+void FOTA_Loop(){
 
+
+
+
+}
 
 
 void setup() {
@@ -5114,6 +4877,7 @@ void loop() {
 	
 	Update_Timers();
 
+	Process_System_Alarm_States();
 	
 	Process_State_Machine();
 
@@ -5122,10 +4886,5 @@ void loop() {
 
 	vim_store(data_global);
 	
-	
-	
-
-	
-
 }
 
