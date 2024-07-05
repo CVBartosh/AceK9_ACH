@@ -2333,6 +2333,41 @@ void on_monitor_subscribe_command(const char* str) {
     
 }
 
+void on_monitor_check_fota(const char* str) {
+    
+    last_packet.cmd = COMMAND_ID::FOTA;
+	last_packet.status = STATUS_CODE::FOTA_CHECK_FW;
+
+    fota_packet data;
+    memset(&data, 0, sizeof(data));
+	data.fotaStatus = STATUS_CODE::FOTA_CHECK_FW;    
+        
+    uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
+    
+    uint8_t* payload = (uint8_t*)malloc(sizeof(data)+5);
+    if(payload==nullptr) {
+        //MONITOR.println("Out of memory");
+        while(1);
+    }
+    payload[0]=(uint8_t)last_packet.cmd;
+    memcpy(payload+1,&crc,sizeof(uint32_t));
+    memcpy(payload+5,&data,sizeof(data));
+
+    status = sendUserDataRelayAPIFrame(&my_xbee,(const char*)payload, sizeof(data)+5); 
+    free(payload);
+
+    if (status < 0) 
+    {
+        //MONITOR.printf("Error %d sending fota packet\n", status);
+    }
+    else 
+    {
+        //MONITOR.println("fota packet sent");
+    }
+
+    
+}
+
 void monitor_dev_tick(HardwareSerial& s) {
     if(s.available()) {
         String str = s.readString();
@@ -2356,7 +2391,9 @@ void monitor_dev_tick(HardwareSerial& s) {
             on_monitor_connection(str.c_str());
         } else if (cmd=="config"){
             on_monitor_config(str.c_str());
-        } else if (cmd=="subscribe config"){
+        } else if (cmd=="check fota"){
+			on_monitor_check_fota(str.c_str());
+		} else if (cmd=="subscribe config"){
             on_monitor_subscribe_config(str.c_str()); 
         } else if (cmd=="subscribe command"){
             on_monitor_subscribe_command(str.c_str());
@@ -2364,7 +2401,7 @@ void monitor_dev_tick(HardwareSerial& s) {
             systemsettings_current = systemsettings_default;    
             save_settings();            
         } else if (cmd=="save custom settings"){
-            systemsettings_current.AlarmPower = PowerOpt::p_ManONManOFF;
+            //systemsettings_current.AlarmPower = PowerOpt::p_ManONManOFF;
             save_settings();
         } else if (cmd=="report settings"){
             print_settings();
@@ -4889,7 +4926,20 @@ void Process_State_Machine(){
 	
 }
 
+void FOTA_Loop(){
 
+	if (last_packet.cmd == COMMAND_ID::FOTA){
+		
+		MONITOR.printf("FOTA Packet: Sent\n");
+
+		if (last_packet.status == STATUS_CODE::FOTA_CHECK_FW){
+			
+			MONITOR.printf("FOTA Packet: Waiting for Response\n");
+		}
+
+	}
+
+}
 
 
 
@@ -5087,7 +5137,8 @@ void loop() {
     //MONITOR.printf("Calling Monitor Dev Tick\n");
     monitor_dev_tick(MONITOR);
 
-	
+	// FOTA Code Loop
+	FOTA_Loop();
 
     xbee_dev_tick(&my_xbee);
 
@@ -5115,7 +5166,7 @@ void loop() {
 	Update_Timers();
 
 	
-	Process_State_Machine();
+	//Process_State_Machine();
 
 	//MONITOR.printf("Exiting State Machine\n");
 	

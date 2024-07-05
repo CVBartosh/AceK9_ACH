@@ -13,7 +13,8 @@
 #include <stddef.h>
 
 enum struct STATUS_CODE : int32_t {
-    FOTA_FW_ABSENT = -5,
+    FOTA_FW_ABSENT = -6,
+    ACEK9_STATUS_BAD_TOPIC_HANDLER = -5,
     UNKOWNDATAFROMSERVER = -4,
     UNSUPPORTEDTYPEININIT = -3,
     XBEE_NOT_INTIALIZED = -2,
