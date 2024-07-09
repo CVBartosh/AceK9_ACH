@@ -2368,6 +2368,77 @@ void on_monitor_check_fota(const char* str) {
     
 }
 
+void on_monitor_begin_fota(const char* str) {
+    
+    last_packet.cmd = COMMAND_ID::FOTA;
+	last_packet.status = STATUS_CODE::FOTA_BEGIN;
+
+    fota_packet data;
+    memset(&data, 0, sizeof(data));
+	data.fotaStatus = STATUS_CODE::FOTA_BEGIN;    
+        
+    uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
+    
+    uint8_t* payload = (uint8_t*)malloc(sizeof(data)+5);
+    if(payload==nullptr) {
+        //MONITOR.println("Out of memory");
+        while(1);
+    }
+    payload[0]=(uint8_t)last_packet.cmd;
+    memcpy(payload+1,&crc,sizeof(uint32_t));
+    memcpy(payload+5,&data,sizeof(data));
+
+    status = sendUserDataRelayAPIFrame(&my_xbee,(const char*)payload, sizeof(data)+5); 
+    free(payload);
+
+    if (status < 0) 
+    {
+        //MONITOR.printf("Error %d sending fota packet\n", status);
+    }
+    else 
+    {
+        //MONITOR.println("fota packet sent");
+    }
+
+    
+}
+
+void on_monitor_delete_file(const char* str) {
+    
+    last_packet.cmd = COMMAND_ID::FOTA;
+	last_packet.status = STATUS_CODE::FOTA_DELETE_FILE;
+
+    fota_packet data;
+    memset(&data, 0, sizeof(data));
+	data.fotaStatus = STATUS_CODE::FOTA_DELETE_FILE;    
+        
+    uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
+    
+    uint8_t* payload = (uint8_t*)malloc(sizeof(data)+5);
+    if(payload==nullptr) {
+        //MONITOR.println("Out of memory");
+        while(1);
+    }
+    payload[0]=(uint8_t)last_packet.cmd;
+    memcpy(payload+1,&crc,sizeof(uint32_t));
+    memcpy(payload+5,&data,sizeof(data));
+
+    status = sendUserDataRelayAPIFrame(&my_xbee,(const char*)payload, sizeof(data)+5); 
+    free(payload);
+
+    if (status < 0) 
+    {
+        //MONITOR.printf("Error %d sending fota packet\n", status);
+    }
+    else 
+    {
+        //MONITOR.println("fota packet sent");
+    }
+
+    
+}
+
+
 void monitor_dev_tick(HardwareSerial& s) {
     if(s.available()) {
         String str = s.readString();
@@ -2393,7 +2464,11 @@ void monitor_dev_tick(HardwareSerial& s) {
             on_monitor_config(str.c_str());
         } else if (cmd=="check fota"){
 			on_monitor_check_fota(str.c_str());
-		} else if (cmd=="subscribe config"){
+		} else if (cmd=="begin fota"){
+			on_monitor_begin_fota(str.c_str());
+		} else if (cmd=="delete file"){
+			on_monitor_delete_file(str.c_str());
+		}else if (cmd=="subscribe config"){
             on_monitor_subscribe_config(str.c_str()); 
         } else if (cmd=="subscribe command"){
             on_monitor_subscribe_command(str.c_str());
@@ -5075,7 +5150,9 @@ void setup() {
 	/*while(1) {
 		loop2();
 	}*/
-    //MONITOR.printf("Exiting Setup()\n");
+
+	// ADD Date
+    MONITOR.printf("Firmware Date"__DATE__"\n");
 
     
 }
