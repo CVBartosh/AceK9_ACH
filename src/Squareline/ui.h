@@ -45,12 +45,15 @@ extern lv_obj_t * ui_ImgButtonWiFi1;
 extern lv_obj_t * ui_ImgButtonWiFi2;
 extern lv_obj_t * ui_ImgButtonWiFi3;
 extern lv_obj_t * ui_ImgButtonWiFi4;
-extern lv_obj_t * ui_ImgTempCircle;
+extern lv_obj_t * ui_BtnSnooze;
+extern lv_obj_t * ui_LabelAlarmText;
+extern lv_obj_t * ui_LabelAlarmCounter;
 extern lv_obj_t * ui_LabelLeftTemp;
 extern lv_obj_t * ui_LabelRightTemp;
 extern lv_obj_t * ui_LabelTempAvg;
 void ui_event_ImgButtonEnterMenu1(lv_event_t * e);
 extern lv_obj_t * ui_ImgButtonEnterMenu1;
+extern lv_obj_t * ui_LabelAlarmText1;
 // SCREEN: ui_MenuScreen1
 void ui_MenuScreen1_screen_init(void);
 extern lv_obj_t * ui_MenuScreen1;
@@ -258,8 +261,6 @@ LV_IMG_DECLARE(ui_img_wifi_1_png);    // assets\WiFi 1.png
 LV_IMG_DECLARE(ui_img_wifi_2_png);    // assets\WiFi 2.png
 LV_IMG_DECLARE(ui_img_wifi_3_png);    // assets\WiFi 3.png
 LV_IMG_DECLARE(ui_img_wifi_4_png);    // assets\WiFi 4.png
-LV_IMG_DECLARE(ui_img_greentempcircle_png);    // assets\GreenTempCircle.png
-LV_IMG_DECLARE(ui_img_redtempcircle_png);    // assets\RedTempCircle.png
 LV_IMG_DECLARE(ui_img_arrowrighticon_png);    // assets\ArrowRightIcon.png
 LV_IMG_DECLARE(ui_img_arrowdownicon_png);    // assets\ArrowDownIcon.png
 LV_IMG_DECLARE(ui_img_arrowdowniconsmall_png);    // assets\ArrowDownIconSmall.png

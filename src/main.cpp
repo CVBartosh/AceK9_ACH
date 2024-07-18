@@ -21,7 +21,7 @@
 #include "vim_controller.hpp"
 #include "SPIFFS.h"
 #include "init_csv.h"
-
+#include <esp_ota_ops.h>
 //================================================== Temperature Variables =========================================
 #define TempErrorGeneral 'E'
 #define TempErrorOpen '5'
@@ -5179,7 +5179,7 @@ bool Check_ACK()
 }
 
 void FOTA_Loop(){
-
+	esp_ota_handle_t ota_handle = 0;
 	bool FirstTimeCheck = true;
 
 	if (CurrentFOTACode != FOTA_Done)
@@ -5262,6 +5262,7 @@ void FOTA_Loop(){
 			if (FirstTimeCheck)
 			{
 				MONITOR.println("FOTA Downloading");
+				esp_ota_begin(esp_ota_get_next_update_partition(NULL), OTA_SIZE_UNKNOWN, &ota_handle);
 				FirstTimeCheck = false;
 			}
 			else
@@ -5271,33 +5272,25 @@ void FOTA_Loop(){
 				{
 					// Move on to CheckFW
 					CurrentFOTACode = FOTA_Success;
-
+					if(ESP_OK!=esp_ota_set_boot_partition(esp_ota_get_next_update_partition(NULL))) {
+						// TODO: Put error handling here
+						// if it's an error, the update will be discarded
+					}
 					FirstTimeCheck = true;
 					PreviousFOTACode = CurrentFOTACode;
+					
 				}
 				else
 				{
 
 					// FOTA LOOPING CODE SECTION
-
-					uint8_t fwdata[FOTA_Packet_Length];
-
-					for (size_t i = 0; i < FOTA_Packet_Length; ++i)
-					{
-						fwdata[i] = update_data.data[i];
-					}
-
-					File file = SPIFFS.open("/received_data.bin", FILE_APPEND); // Open file for appending
-
-					if (!file)
-					{
+					
+					if(ESP_OK!=esp_ota_write(ota_handle,update_data.data,(size_t)update_data.size)) {
 						MONITOR.println("Failed to open file for appending");
 						CurrentFOTACode = FOTACode::FOTA_Fail;
 						PreviousFOTACode = CurrentFOTACode;
 					}
-
-					file.write(fwdata, FOTA_Packet_Length); // Write data to file
-					file.close();			  // Close the file to save changes
+					
 				}
 			}
 
@@ -5537,6 +5530,7 @@ void setup()
 
 	// ADD Date
 	MONITOR.printf("Firmware Date" __DATE__ "\n");
+	MONITOR.printf("Firmware Time" __TIME__ "\n");
 }
 
 void loop()

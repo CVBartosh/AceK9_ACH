@@ -32,12 +32,15 @@ lv_obj_t * ui_ImgButtonWiFi1;
 lv_obj_t * ui_ImgButtonWiFi2;
 lv_obj_t * ui_ImgButtonWiFi3;
 lv_obj_t * ui_ImgButtonWiFi4;
-lv_obj_t * ui_ImgTempCircle;
+lv_obj_t * ui_BtnSnooze;
+lv_obj_t * ui_LabelAlarmText;
+lv_obj_t * ui_LabelAlarmCounter;
 lv_obj_t * ui_LabelLeftTemp;
 lv_obj_t * ui_LabelRightTemp;
 lv_obj_t * ui_LabelTempAvg;
 void ui_event_ImgButtonEnterMenu1(lv_event_t * e);
 lv_obj_t * ui_ImgButtonEnterMenu1;
+lv_obj_t * ui_LabelAlarmText1;
 
 
 // SCREEN: ui_MenuScreen1

@@ -36,8 +36,6 @@ images/ui_img_wifi_1_png.c
 images/ui_img_wifi_2_png.c
 images/ui_img_wifi_3_png.c
 images/ui_img_wifi_4_png.c
-images/ui_img_greentempcircle_png.c
-images/ui_img_redtempcircle_png.c
 images/ui_img_arrowrighticon_png.c
 images/ui_img_arrowdownicon_png.c
 images/ui_img_arrowdowniconsmall_png.c

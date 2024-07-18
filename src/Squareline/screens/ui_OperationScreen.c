@@ -138,14 +138,38 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_align(ui_ImgButtonWiFi4, LV_ALIGN_CENTER);
     lv_obj_add_flag(ui_ImgButtonWiFi4, LV_OBJ_FLAG_HIDDEN);     /// Flags
 
-    ui_ImgTempCircle = lv_imgbtn_create(ui_OperationScreen);
-    lv_imgbtn_set_src(ui_ImgTempCircle, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_greentempcircle_png, NULL);
-    lv_imgbtn_set_src(ui_ImgTempCircle, LV_IMGBTN_STATE_PRESSED, NULL, &ui_img_redtempcircle_png, NULL);
-    lv_obj_set_height(ui_ImgTempCircle, 135);
-    lv_obj_set_width(ui_ImgTempCircle, LV_SIZE_CONTENT);   /// 133
-    lv_obj_set_x(ui_ImgTempCircle, 0);
-    lv_obj_set_y(ui_ImgTempCircle, 34);
-    lv_obj_set_align(ui_ImgTempCircle, LV_ALIGN_CENTER);
+    ui_BtnSnooze = lv_btn_create(ui_OperationScreen);
+    lv_obj_set_width(ui_BtnSnooze, 148);
+    lv_obj_set_height(ui_BtnSnooze, 26);
+    lv_obj_set_x(ui_BtnSnooze, 0);
+    lv_obj_set_y(ui_BtnSnooze, -20);
+    lv_obj_set_align(ui_BtnSnooze, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_BtnSnooze, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
+    lv_obj_clear_flag(ui_BtnSnooze, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_color(ui_BtnSnooze, lv_color_hex(0xFFFA29), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_BtnSnooze, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_LabelAlarmText = lv_label_create(ui_OperationScreen);
+    lv_obj_set_width(ui_LabelAlarmText, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_LabelAlarmText, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_LabelAlarmText, -29);
+    lv_obj_set_y(ui_LabelAlarmText, -46);
+    lv_obj_set_align(ui_LabelAlarmText, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_LabelAlarmText, "SNOOZING");
+    lv_obj_set_style_text_color(ui_LabelAlarmText, lv_color_hex(0xC2000D), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_LabelAlarmText, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_LabelAlarmText, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_LabelAlarmCounter = lv_label_create(ui_OperationScreen);
+    lv_obj_set_width(ui_LabelAlarmCounter, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_LabelAlarmCounter, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_LabelAlarmCounter, 65);
+    lv_obj_set_y(ui_LabelAlarmCounter, -46);
+    lv_obj_set_align(ui_LabelAlarmCounter, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_LabelAlarmCounter, "99:99");
+    lv_obj_set_style_text_color(ui_LabelAlarmCounter, lv_color_hex(0xC2000D), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_LabelAlarmCounter, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_LabelAlarmCounter, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_LabelLeftTemp = lv_label_create(ui_OperationScreen);
     lv_obj_set_width(ui_LabelLeftTemp, LV_SIZE_CONTENT);   /// 1
@@ -154,6 +178,7 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_y(ui_LabelLeftTemp, 45);
     lv_obj_set_align(ui_LabelLeftTemp, LV_ALIGN_CENTER);
     lv_label_set_text(ui_LabelLeftTemp, "---");
+    lv_obj_set_style_text_font(ui_LabelLeftTemp, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_LabelRightTemp = lv_label_create(ui_OperationScreen);
     lv_obj_set_width(ui_LabelRightTemp, LV_SIZE_CONTENT);   /// 1
@@ -162,6 +187,7 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_y(ui_LabelRightTemp, 45);
     lv_obj_set_align(ui_LabelRightTemp, LV_ALIGN_CENTER);
     lv_label_set_text(ui_LabelRightTemp, "---");
+    lv_obj_set_style_text_font(ui_LabelRightTemp, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_LabelTempAvg = lv_label_create(ui_OperationScreen);
     lv_obj_set_width(ui_LabelTempAvg, LV_SIZE_CONTENT);   /// 1
@@ -170,6 +196,7 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_y(ui_LabelTempAvg, 34);
     lv_obj_set_align(ui_LabelTempAvg, LV_ALIGN_CENTER);
     lv_label_set_text(ui_LabelTempAvg, "---");
+    lv_obj_set_style_text_font(ui_LabelTempAvg, &lv_font_montserrat_40, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_ImgButtonEnterMenu1 = lv_imgbtn_create(ui_OperationScreen);
     lv_imgbtn_set_src(ui_ImgButtonEnterMenu1, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_arrowrighticon_png, NULL);
@@ -178,6 +205,17 @@ void ui_OperationScreen_screen_init(void)
     lv_obj_set_x(ui_ImgButtonEnterMenu1, 137);
     lv_obj_set_y(ui_ImgButtonEnterMenu1, 0);
     lv_obj_set_align(ui_ImgButtonEnterMenu1, LV_ALIGN_CENTER);
+
+    ui_LabelAlarmText1 = lv_label_create(ui_OperationScreen);
+    lv_obj_set_width(ui_LabelAlarmText1, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_LabelAlarmText1, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_LabelAlarmText1, 0);
+    lv_obj_set_y(ui_LabelAlarmText1, -20);
+    lv_obj_set_align(ui_LabelAlarmText1, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_LabelAlarmText1, "SNOOZE  9/9");
+    lv_obj_set_style_text_color(ui_LabelAlarmText1, lv_color_hex(0xC2000D), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_LabelAlarmText1, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_LabelAlarmText1, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_add_event_cb(ui_ImgButtonEnterMenu1, ui_event_ImgButtonEnterMenu1, LV_EVENT_ALL, NULL);
 
