@@ -431,6 +431,8 @@ AlarmState Previous_System_Alarm_State = AlarmState::a_None;
 AlarmState Current_System_Alarm_State = AlarmState::a_None;
 bool AlarmStateEnabled = false;
 
+#define SYNC_ALARM_STATES() Previous_System_Alarm_State = Current_System_Alarm_State
+
 #define AlarmTextMaxChars 50
 String PreAlertText = "";
 String FullAlarmText = "";
@@ -1393,6 +1395,375 @@ void set_ALM(bool value)
     digitalWrite(ACECON_ALM_OUT,value);
 }
 
+void handlePreAlarmState(){
+
+	if (Previous_System_Alarm_State != AlarmState::a_PreAlarm)
+	{
+		MONITOR.println("Transitioning to PreAlarm state");
+
+		// Send HPT(ALM) Signal
+		set_ALM(LOW);
+
+		// Set Trigger Time and Counter
+		PreAlarmTriggerTime = millis();
+		MONITOR.printf("PreAlarmTriggerTime set to %lu\n", PreAlarmTriggerTime);
+		PreviousPreAlarmCounter = 0;
+		CurrentPreAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
+		DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
+
+		// Enable Pre Alarm Notification Timer
+		PreAlarmNotification_Timer.StartTimer(PreAlarmNotification_Timer.Threshold);
+		MONITOR.printf("PreAlarmNotification_Timer started with threshold %lu\n", PreAlarmNotification_Timer.Threshold);
+
+		// Enable Timer
+		SystemAlarm_Timer.StartTimer(SystemAlarm_Timer.Threshold);
+		MONITOR.printf("SystemAlarm_Timer started with threshold %lu\n", SystemAlarm_Timer.Threshold);
+
+		// Set Prev State
+		SYNC_ALARM_STATES();
+	}
+
+	// Check if the Alarm conditions have been cleared
+	if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && data_global.Aux1Input_current == false && data_global.Aux2Input_current == false)
+	{
+		MONITOR.println("All alarm conditions cleared in PreAlarm state");
+
+		// Battery Flag
+		if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
+		// Stall Flag
+		if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
+		// Temperature Flag
+		if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
+		// Temperature Sensor Flag
+		if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
+		// DaisyChain Flag
+		if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
+
+		// Set the general update flag
+		data_global.updateIcons  = true;
+
+		// Disable Pre Alarm Notification Timer
+		PreAlarmNotification_Timer.StopTimer();
+		MONITOR.println("PreAlarmNotification_Timer stopped");
+
+		// Clear the OverFlow Flag and Disable the Timer
+		SystemAlarm_Timer.StopTimer();
+		MONITOR.println("SystemAlarm_Timer stopped");
+		DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
+
+		// Set Alarm to None
+		SYNC_ALARM_STATES();
+		Current_System_Alarm_State = AlarmState::a_None;
+		MONITOR.println("Transitioning to None state from PreAlarm");
+	}
+	// Check if the alarm needs to graduate to full
+	else if (SystemAlarm_Timer.OverFlowFlag == true)
+	{
+		MONITOR.println("PreAlarm Timer overflow detected, transitioning to FullAlarm");
+
+		// Check Battery
+		if (data_global.batt_error_current == true) { data_global.battchanged = true; }
+		// Check Stall
+		if (data_global.engineStalled_current == true) { data_global.engine_changed = true; }
+		// Temperature Flag
+		if (data_global.temp_alarmFlag_current == true) { data_global.temp_changed = true; }
+		// Temperature Sensor Flag
+		if (data_global.temp_errorFlag_current == true) { data_global.temp_changed = true; }
+		// DiasyChain Flag
+		if (data_global.Aux1Input_current == true || data_global.Aux2Input_current == true) { data_global.aux_changed = true; }
+
+		// Set the General Update Flag
+		data_global.updateIcons = true;
+
+		// Disable Pre Alarm Notification Timer
+		PreAlarmNotification_Timer.StopTimer();
+		DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
+
+		SYNC_ALARM_STATES();
+		Current_System_Alarm_State = AlarmState::a_FullAlarm;
+		MONITOR.println("Transitioned to FullAlarm from PreAlarm");
+	}
+	// Check if the Countdown Timer needs to be updated
+	else if (PreAlarmNotification_Timer.OverFlowFlag == true)
+	{
+		MONITOR.println("PreAlarmNotification_Timer overflow detected");
+		PreAlarmNotification_Timer.OverFlowFlag = false;
+		PreAlarmNotification_Timer.SyncTimerVal();
+
+		// Set Pre Alarm Sound Pulse
+		//Set_SoundPulse(PulseProfile::pp_DoubleBeep);
+	}
+
+	// Check if the counter has changed enough to warrant an update to the screen
+	
+	CurrentPreAlarmCounter = static_cast<int>((millis() - PreAlarmTriggerTime) / 1000);
+	
+	if (CurrentPreAlarmCounter != PreviousPreAlarmCounter)
+	{
+		PreviousPreAlarmCounter = CurrentPreAlarmCounter;
+
+		// Set General Update Flag
+		data_global.updateIcons = true;
+
+		// Update Display Counter
+		DisplayPreAlarmCounter = MaxPreAlarmTime - CurrentPreAlarmCounter;
+		MONITOR.printf("DisplayPreAlarmCounter updated to %d\n", DisplayPreAlarmCounter);
+
+		// Make sure it doesn't go below zero
+		if (DisplayPreAlarmCounter < 0) { DisplayPreAlarmCounter = 0; }
+
+		UpdatePreAlarmFlag = true;
+		data_global.updateIcons = true;
+	}
+
+}
+
+void handleSnoozeState(){
+	
+	if (Previous_System_Alarm_State != AlarmState::a_Snooze)
+	{
+		MONITOR.println("Transitioning to Snooze state");
+
+		// Send HPT(ALM) Signal
+		set_ALM(LOW);
+
+		// Set Trigger Time and Counter
+		SnoozeAlarmTriggerTime = millis();
+		MONITOR.printf("SnoozeAlarmTriggerTime set to %lu\n", SnoozeAlarmTriggerTime);
+		PreviousSnoozeAlarmCounter = 0;
+		CurrentSnoozeAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
+		DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
+
+		// Enable Pre Alarm Notification Timer
+		SnoozeAlarm_Timer.StartTimer(SnoozeAlarm_Timer.Threshold);
+		MONITOR.printf("SnoozeAlarm_Timer started with threshold %lu\n", SnoozeAlarm_Timer.Threshold);
+
+		// Set Prev State
+		SYNC_ALARM_STATES();
+	}
+
+	// Check if all Alarm conditions have been cleared
+	if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && data_global.Aux1Input_current == false && data_global.Aux2Input_current == false)
+	{
+		MONITOR.println("All alarm conditions cleared in Snooze state");
+
+		// Check Battery
+		if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
+		//Check Stall
+		if (data_global.engineStalled_previous == true) { data_global.engine_changed  = true; }
+		// Check Temperature
+		if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
+		// Check Temperature Sensor Flag
+		if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
+		// Daisy Chain
+		if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
+
+		// Set the General Update Flag
+		redrawFlag = true;
+
+		// Set Alarm to None
+		SYNC_ALARM_STATES();
+		Current_System_Alarm_State = AlarmState::a_None;
+		MONITOR.println("Transitioning to None state from Snooze");
+	}
+
+	// Check if the Snooze Timer has Overflowed
+	else if (SnoozeAlarm_Timer.OverFlowFlag == true)
+	{
+		MONITOR.println("SnoozeAlarm_Timer overflow detected, transitioning to PreAlarm");
+
+		// Check Battery
+		if (data_global.batt_error_current == true) { data_global.battchanged = true; }
+		// Check Stall
+		if (data_global.engineStalled_current == true) { data_global.engine_changed = true; }
+		// Temperature Flag
+		if (data_global.temp_alarmFlag_current == true) { data_global.temp_changed = true; }
+		// TEmperature Sensor Flag
+		if (data_global.temp_errorFlag_current == true) { data_global.temp_changed = true; }
+		// Daisy Chain Flag
+		if (data_global.Aux1Input_current == true || data_global.Aux2Input_current == true) { data_global.aux_changed = true; }
+
+		// Set the General Update Flag
+		redrawFlag = true;
+
+		// Clear the OverFlow Flag and Disable the Timer
+		SnoozeAlarm_Timer.StopTimer();
+		MONITOR.println("SnoozeAlarm_Timer stopped");
+		DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
+
+		// Set Alarm to Full
+		SYNC_ALARM_STATES();
+		Current_System_Alarm_State = AlarmState::a_PreAlarm;
+		MONITOR.println("Transitioned to PreAlarm from Snooze");
+	}
+
+	// Check if the counter has changed enough to warrant an update to the screen
+	PreviousSnoozeAlarmCounter = CurrentSnoozeAlarmCounter;
+	CurrentSnoozeAlarmCounter = static_cast<int>((millis() - SnoozeAlarmTriggerTime) / 1000);
+	MONITOR.printf("CurrentSnoozeAlarmCounter: %d, PreviousSnoozeAlarmCounter: %d\n", CurrentSnoozeAlarmCounter, PreviousSnoozeAlarmCounter);
+
+	if (CurrentSnoozeAlarmCounter != PreviousSnoozeAlarmCounter)
+	{
+		PreviousSnoozeAlarmCounter = CurrentSnoozeAlarmCounter;
+
+		// Set General Update Flag
+		redrawFlag = true;
+
+		// Update Display Counter
+		DisplaySnoozeAlarmCounter = MaxSnoozeAlarmTime - CurrentSnoozeAlarmCounter;
+		MONITOR.printf("DisplaySnoozeAlarmCounter updated to %d\n", DisplaySnoozeAlarmCounter);
+
+		// Make sure it doesn't go below zero
+		if (DisplaySnoozeAlarmCounter < 0) { DisplaySnoozeAlarmCounter = 0; }
+
+		UpdateSnoozeAlarmFlag = true;
+	}
+
+}
+
+void handleFullAlarmState(){
+
+	if (Previous_System_Alarm_State != AlarmState::a_FullAlarm)
+	{
+		MONITOR.println("Transitioning to FullAlarm state");
+
+		// Emit Alarm Pulse
+		//Set_SoundPulse(PulseProfile::pp_SystemTest);
+
+		// Send HPT(ALM) Signal
+		set_ALM(HIGH);
+
+		// Clear any previous Counters
+		PreviousFullAlarmCounter = 0;
+		CurrentFullAlarmCounter = 0;
+
+		// Log the trigger time
+		FullAlarmTriggerTime = millis();
+		MONITOR.printf("FullAlarmTriggerTime set to %lu\n", FullAlarmTriggerTime);
+
+		// Set Prev State
+		SYNC_ALARM_STATES();
+	}
+
+	// Check if all Alarm conditions have been cleared and System Test is not Active. If System test is active then that will be handled by the system test state
+	if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && System_Test_Alarm_Active == false && data_global.Aux1Input_current == false && data_global.Aux2Input_current == false)
+	{
+		MONITOR.println("All alarm conditions cleared in FullAlarm state");
+
+		// Check Battery
+		if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
+		//Check Stall
+		if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
+		// Check Temperature
+		if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
+		// Check Temperature Sensor Flag
+		if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
+		// Daisy Chain Flag
+		if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
+
+		// Set the General Update Flag
+		redrawFlag = true;
+
+		// Disable Timer and Clear OverFlow Flag
+		SystemAlarm_Timer.StopTimer();
+		MONITOR.println("SystemAlarm_Timer stopped");
+
+		// Set Alarm to None
+		SYNC_ALARM_STATES();
+		Current_System_Alarm_State = AlarmState::a_None;
+		MONITOR.println("Transitioning to None state from FullAlarm");
+	}
+
+	// Get Count
+	PreviousFullAlarmCounter = CurrentFullAlarmCounter;
+	CurrentFullAlarmCounter = static_cast<long>((millis() - FullAlarmTriggerTime) / 1000);
+	//MONITOR.printf("CurrentFullAlarmCounter: %ld, PreviousFullAlarmCounter: %ld\n", CurrentFullAlarmCounter, PreviousFullAlarmCounter);
+
+	if (CurrentFullAlarmCounter != PreviousFullAlarmCounter)
+	{
+		// Set Flag so display gets updated
+		UpdateFullAlarmFlag = true;
+		// Set General Update Flag
+		redrawFlag = true;
+	}
+
+}
+
+void handleNoneState(){
+
+	if (Previous_System_Alarm_State != AlarmState::a_None)
+	{
+		MONITOR.println("Transitioning to None state");
+
+		// Send HPT(ALM) Signal
+		set_ALM(LOW);
+
+		// Set No Sound Pulse
+		//Set_SoundPulse(PulseProfile::pp_NoSound);
+
+		// Clear the Pre-Alarm, Snooze and Full Alarm Variables and Timers
+		PreviousPreAlarmCounter = 0;
+		CurrentPreAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
+		DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
+		PreviousSnoozeAlarmCounter = 0;
+		CurrentSnoozeAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
+		DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
+		PreviousFullAlarmCounter = 0;
+		CurrentFullAlarmCounter = 0;
+
+		// Disable Timers
+		PreAlarmNotification_Timer.StopTimer();
+		SystemAlarm_Timer.StopTimer();
+		SnoozeAlarm_Timer.StopTimer();
+		MONITOR.println("All alarm-related timers stopped");
+
+		// Set Prev State
+		SYNC_ALARM_STATES();
+	}
+
+	// Check Battery, Stall, Temp Alarm, Aux
+	if (data_global.batt_error_current == true || data_global.engineStalled_current == true || data_global.temp_alarmFlag_current == true || data_global.temp_errorFlag_current == true || data_global.Aux1Input_current == true || data_global.Aux2Input_current == true)
+	{
+		MONITOR.println("Alarm condition detected in None state");
+
+		// Check Battery
+		if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
+		// Check Stall
+		if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
+		// Check Temp
+		if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
+		// Check Temperature Sensor Flag
+		if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
+		// DaisyChain Flag
+		if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
+
+		// Set the General Update Flag
+		redrawFlag = true;
+
+		if (systemsettings_current.AutoSnoozeEnabled == true) { MONITOR.println("AutoSnooze is enabled"); }
+		if (systemsettings_current.InitialPowerUpFlag == true) { MONITOR.println("InitialPowerUpFlag is set"); }
+
+		// AUTOSNOOZE FUNCTIONALITY HERE
+		// If the system has just woken up then go to snooze
+		if (systemsettings_current.InitialPowerUpFlag == true && systemsettings_current.AutoSnoozeEnabled == true)
+		{
+			MONITOR.println("AutoSnooze Triggered, transitioning to Snooze state");
+
+			// Go to Snooze Alarm State
+			SYNC_ALARM_STATES();
+			Current_System_Alarm_State = AlarmState::a_Snooze;
+		}
+		else
+		{
+			MONITOR.println("PreAlarm Triggered, transitioning to PreAlarm state");
+
+			// Set Alarm to Pre ALarm
+			SYNC_ALARM_STATES();
+			Current_System_Alarm_State = AlarmState::a_PreAlarm;
+		}
+	}
+}
+
 void Process_System_Alarm_States()
 {
 	data_global = vim_load();
@@ -1400,377 +1771,33 @@ void Process_System_Alarm_States()
 	// Make Sure Alarms are enabled (this is state dependant)
 	if (AlarmStateEnabled == false)
 	{
+		MONITOR.println("Alarm State Disabled");
 		Current_System_Alarm_State = AlarmState::a_None; // Set to none
 		Previous_System_Alarm_State = AlarmState::a_Init; // Setting previous to anything other than none will ensure that the alarm states will disable
 
 	}
 	else
 	{
-		// Turn Off Full Alarm if necessary
-		if (Previous_System_Alarm_State == AlarmState::a_FullAlarm && Current_System_Alarm_State != AlarmState::a_FullAlarm)
-		{
-			// Set No Sound Pulse
-			//Set_SoundPulse(PulseProfile::pp_NoSound);
-		}
 
 		// System Alarm is in prealarm
 		if (Current_System_Alarm_State == AlarmState::a_PreAlarm)
 		{
-			if (Previous_System_Alarm_State != AlarmState::a_PreAlarm)
-			{
-				MONITOR.println("Alarm set to PreAlarm");
-
-				// Send HPT(ALM) Signal
-				set_ALM(LOW);
-
-				// Set Trigger Time and Counter
-				PreAlarmTriggerTime = millis();
-				PreviousPreAlarmCounter = 0;
-				CurrentPreAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
-				DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
-
-				// Enable Pre Alarm Notification Timer
-				PreAlarmNotification_Timer.StartTimer(PreAlarmNotification_Timer.Threshold);
-
-				// Enable Timer
-				SystemAlarm_Timer.StartTimer(SystemAlarm_Timer.Threshold);
-
-				// Set Prev State
-				Previous_System_Alarm_State = Current_System_Alarm_State;
-
-			}
-
-			// Check if the Alarm conditions have been cleared
-			if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && data_global.Aux1Input_current == false && data_global.Aux2Input_current == false)
-			{
-				// Battery Flag
-				if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
-				// Stall Flag
-				if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
-				// Temperature Flag
-				if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
-				// Temperature Sensor Flag
-				if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
-				// DaisyChain Flag
-				if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
-
-				// Set the general update flag
-				data_global.updateIcons  = true;
-
-				// Disable Pre Alarm Notification Timer
-				PreAlarmNotification_Timer.StopTimer();
-
-				// Clear the OverFlow Flag and Disable the Timer
-				SystemAlarm_Timer.StopTimer();
-				DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
-
-				// Set Alarm to None
-				Previous_System_Alarm_State = Current_System_Alarm_State;
-				Current_System_Alarm_State = AlarmState::a_None;
-
-			}
-			// Check if the alarm needs to graduate to full
-			else if (SystemAlarm_Timer.OverFlowFlag == true)
-			{
-				
-				// Check Battery
-				if (data_global.batt_error_current == true) { data_global.battchanged = true; }
-				// Check Stall
-				if (data_global.engineStalled_current == true) { data_global.engine_changed = true; }
-				// Temperature Flag
-				if (data_global.temp_alarmFlag_current == true) { data_global.temp_changed = true; }
-				// Temperaure Sensor Flag
-				if (data_global.temp_errorFlag_current == true) { data_global.temp_changed = true; }
-				// DiasyChain Flag
-				if (data_global.Aux1Input_current == true || data_global.Aux2Input_current == true) { data_global.aux_changed = true; }
-
-				// Set the General Update Flag
-				data_global.updateIcons = true;
-
-				// Set Alarm to Full
-				// Disable Pre Alarm Notification Timer
-				PreAlarmNotification_Timer.StopTimer();
-				DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
-
-				Previous_System_Alarm_State = Current_System_Alarm_State;
-				Current_System_Alarm_State = AlarmState::a_FullAlarm;
-			}
-			// Check if the Countdown Timer needs to be updated
-			else if (PreAlarmNotification_Timer.OverFlowFlag == true)
-			{
-				PreAlarmNotification_Timer.OverFlowFlag = false;
-				PreAlarmNotification_Timer.SyncTimerVal();
-
-				// Set Pre Alarm Sound Pulse
-				//Set_SoundPulse(PulseProfile::pp_DoubleBeep);
-
-			}
-
-			// Check if the counter has changed enough to warrant an update to the screen
-			CurrentPreAlarmCounter = static_cast<int>((millis() - PreAlarmTriggerTime) / 1000);
-
-			if (CurrentPreAlarmCounter != PreviousPreAlarmCounter)
-			{
-				PreviousPreAlarmCounter = CurrentPreAlarmCounter;
-
-				// Set General Update Flag
-				data_global.updateIcons = true;
-
-				// Update Display Counter
-				DisplayPreAlarmCounter = MaxPreAlarmTime - CurrentPreAlarmCounter;
-
-				// Make sure it doesn't go below zero
-				if (DisplayPreAlarmCounter < 0) { DisplayPreAlarmCounter = 0; }
-
-				UpdatePreAlarmFlag = true;
-				data_global.updateIcons = true;
-			}
-
-
+			handlePreAlarmState();
 		}
 		// System is Snoozed
 		else if (Current_System_Alarm_State == AlarmState::a_Snooze)
 		{
-			if (Previous_System_Alarm_State != AlarmState::a_Snooze)
-			{
-				MONITOR.println("Alarm set to Snooze");
-
-				// Send HPT(ALM) Signal
-				set_ALM(LOW);
-
-				// Set Trigger Time and Counter
-				SnoozeAlarmTriggerTime = millis();
-				PreviousSnoozeAlarmCounter = 0;
-				CurrentSnoozeAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
-				DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
-
-				// Enable Pre Alarm Notification Timer
-				SnoozeAlarm_Timer.StartTimer(SnoozeAlarm_Timer.Threshold);
-
-				// Set Prev State
-				Previous_System_Alarm_State = Current_System_Alarm_State;
-
-			}
-
-			// Check if all Alarm conditions have been cleared
-			if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && data_global.Aux1Input_current == false && data_global.Aux2Input_current == false)
-			{
-				// Check Battery
-				if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
-				//Check Stall
-				if (data_global.engineStalled_previous == true) { data_global.engine_changed  = true; }
-				// Check Temperature
-				if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
-				// Check Temperature Sensor Flag
-				if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
-				// Daisy Chain
-				if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
-
-				// Set the General Update Flag
-				redrawFlag = true;
-
-				// Set Alarm to None
-				Previous_System_Alarm_State = Current_System_Alarm_State;
-				Current_System_Alarm_State = AlarmState::a_None;
-			}
-
-			// Check if the Snooze Timer has Overflowed
-			else if (SnoozeAlarm_Timer.OverFlowFlag == true)
-			{
-
-				// Check Battery
-				if (data_global.batt_error_current == true) { data_global.battchanged = true; }
-				// Check Stall
-				if (data_global.engineStalled_current == true) { data_global.engine_changed = true; }
-				// Temperature Flag
-				if (data_global.temp_alarmFlag_current == true) { data_global.temp_changed = true; }
-				// TEmperature Sensor Flag
-				if (data_global.temp_errorFlag_current == true) { data_global.temp_changed = true; }
-				// Daisy Chain Flag
-				if (data_global.Aux1Input_current == true || data_global.Aux2Input_current == true) { data_global.aux_changed = true; }
-
-				// Set the General Update Flag
-				redrawFlag = true;
-
-				// Clear the OverFlow Flag and Disable the Timer
-				SnoozeAlarm_Timer.StopTimer();
-				DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
-
-				// Set Alarm to Full
-
-				Previous_System_Alarm_State = Current_System_Alarm_State;
-				Current_System_Alarm_State = AlarmState::a_PreAlarm;
-			}
-
-			// Check if the counter has changed enough to warrant an update to the screen
-			CurrentSnoozeAlarmCounter = static_cast<int>((millis() - SnoozeAlarmTriggerTime) / 1000);
-
-			if (CurrentSnoozeAlarmCounter != PreviousSnoozeAlarmCounter)
-			{
-				PreviousSnoozeAlarmCounter = CurrentSnoozeAlarmCounter;
-
-				// Set General Update Flag
-				redrawFlag = true;
-
-				// Update Display Counter
-				DisplaySnoozeAlarmCounter = MaxSnoozeAlarmTime - CurrentSnoozeAlarmCounter;
-
-				// Make sure it doesn't go below zero
-				if (DisplaySnoozeAlarmCounter < 0) { DisplaySnoozeAlarmCounter = 0; }
-
-				UpdateSnoozeAlarmFlag = true;
-			}
-
-
-
+			handleSnoozeState();
 		}
 		// System is in Full Alarm
 		else if (Current_System_Alarm_State == AlarmState::a_FullAlarm)
 		{
-			if (Previous_System_Alarm_State != AlarmState::a_FullAlarm)
-			{
-				MONITOR.println("Alarm set to FullAlarm");
-
-				// Emit Alarm Pulse
-				//Set_SoundPulse(PulseProfile::pp_SystemTest);
-
-				// Send HPT(ALM) Signal
-				set_ALM(HIGH);
-
-				// Clear any previous Counters
-				PreviousFullAlarmCounter = 0;
-				CurrentFullAlarmCounter = 0;
-
-				// Log the trigger time
-				FullAlarmTriggerTime = millis();
-
-				// Set Prev State
-				Previous_System_Alarm_State = Current_System_Alarm_State;
-
-			}
-
-			// Check if all Alarm conditions have been cleared and System Test is not Active. If System test is active then that will be handled by the system test state
-			if (data_global.batt_error_current == false && data_global.engineStalled_current == false && data_global.temp_alarmFlag_current == false && data_global.temp_errorFlag_current == false && System_Test_Alarm_Active == false && data_global.Aux1Input_current == false && data_global.Aux2Input_current == false)
-			{
-				// Check Battery
-				if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
-				//Check Stall
-				if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
-				// Check Temperature
-				if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
-				// Check Temperature Sensor Flag
-				if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
-				// Daisy Chain Flag
-				if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
-
-				// Set the General Update Flag
-				redrawFlag = true;
-
-				// Disable Timer and Clear OverFlow Flag
-				SystemAlarm_Timer.StopTimer();
-
-				// Set Alarm to None
-				Previous_System_Alarm_State = Current_System_Alarm_State;
-				Current_System_Alarm_State = AlarmState::a_None;
-			}
-
-			// Get Count
-			PreviousFullAlarmCounter = CurrentFullAlarmCounter;
-			CurrentFullAlarmCounter = static_cast<long>((millis() - FullAlarmTriggerTime) / 1000);
-
-			if (CurrentFullAlarmCounter != PreviousFullAlarmCounter)
-			{
-
-				// Set Flag so display gets updated
-				UpdateFullAlarmFlag = true;
-				// Set General Update Flag
-				redrawFlag = true;
-
-			}
-
+			handleFullAlarmState();
 		}
 		// System alarm is current off
 		else if (Current_System_Alarm_State == AlarmState::a_None)
 		{
-			if (Previous_System_Alarm_State != AlarmState::a_None)
-			{
-				MONITOR.println("Alarm set to None");
-
-				// Send HPT(ALM) Signal
-				set_ALM(LOW);
-
-				// Set No Sound Pulse
-				//Set_SoundPulse(PulseProfile::pp_NoSound);
-
-				// Clear the Pre-Alarm, Snooze and Full Alarm Variables and Timers
-				PreviousPreAlarmCounter = 0;
-				CurrentPreAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
-				DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
-				PreviousSnoozeAlarmCounter = 0;
-				CurrentSnoozeAlarmCounter = -1; // -1 Ensures that the Screen updates initially since it looks for a change between Current and Prev
-				DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
-				PreviousFullAlarmCounter = 0;
-				CurrentFullAlarmCounter = 0;
-
-				// Disable Timers
-				PreAlarmNotification_Timer.StopTimer();
-				SystemAlarm_Timer.StopTimer();
-				SnoozeAlarm_Timer.StopTimer();
-
-				// Set Prev State
-				Previous_System_Alarm_State = Current_System_Alarm_State;
-
-			}
-
-			// Check Battery, Stall, Temp Alarm, Aux
-			if (data_global.batt_error_current == true || data_global.engineStalled_current == true || data_global.temp_alarmFlag_current == true || data_global.temp_errorFlag_current == true || data_global.Aux1Input_current == true || data_global.Aux2Input_current == true)
-			{
-				// Check Battery
-				if (data_global.batt_error_previous == true) { data_global.battchanged = true; }
-				// Check Stall
-				if (data_global.engineStalled_previous == true) { data_global.engine_changed = true; }
-				// Check Temp
-				if (data_global.temp_alarmFlag_previous == true) { data_global.temp_changed = true; }
-				// Check Temperature Sensor Flag
-				if (data_global.temp_errorFlag_previous == true) { data_global.temp_changed = true; }
-				// DaisyChain Flag
-				if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
-
-
-				// Set the General Update Flag
-				redrawFlag = true;
-
-
-				if (systemsettings_current.AutoSnoozeEnabled == true) { MONITOR.println("AUTOSNOOZE TRUE"); }
-				if (systemsettings_current.InitialPowerUpFlag == true) { MONITOR.println("POWERUPFLAG TRUE"); }
-
-
-				// AUTOSNOOZE FUNCTIONALITY HERE
-				// If the system has just woken up then go to snooze
-				if (systemsettings_current.InitialPowerUpFlag == true && systemsettings_current.AutoSnoozeEnabled == true)
-				{
-					MONITOR.println("AutoSnooze Triggered");
-
-					// Go to Snooze Alarm State
-					Previous_System_Alarm_State = Current_System_Alarm_State;
-					Current_System_Alarm_State = AlarmState::a_Snooze;
-
-
-				}
-				else
-				{
-					MONITOR.println("PreAlarm Triggered");
-
-					// Set Alarm to Pre ALarm
-					Previous_System_Alarm_State = Current_System_Alarm_State;
-					Current_System_Alarm_State = AlarmState::a_PreAlarm;
-
-				}
-
-
-
-			}
-
+			handleNoneState();
 		}
 
 		
@@ -3043,7 +3070,7 @@ void ui_update_acecon_alarms() {
     if(redrawFlag){
         //MONITOR.println("Processesing Alarm Screens");
 		
-		Previous_System_Alarm_State = Current_System_Alarm_State;
+		//Previous_System_Alarm_State = Current_System_Alarm_State;
 
 		if (Current_System_Alarm_State == AlarmState::a_None)
 			{
@@ -6024,8 +6051,6 @@ void setup() {
     
 }
 
-
-
 /*void loop() {
 }*/
 void loop() {
@@ -6086,25 +6111,24 @@ void loop() {
     if(((int)last_packet.status)<0) {
         on_xbee_error(last_packet.cmd, last_packet.status);
     }
-	
-	
+		
 	// //MONITOR.printf("Calling AceCON Dev Tick\n");
-    //acecon_dev_tick();
+    acecon_dev_tick();
 
 	// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
-    //check_door_condition();
+    check_door_condition();
 
 	// //MONITOR.printf("ui_update_ACECON\n");
-    //ui_update_acecon_alarms();
+    ui_update_acecon_alarms();
 
 	vTaskDelay(5);
     // //================================================== State Machine Logic =========================================*/
 	
-	//Update_Timers();
+	Update_Timers();
 
-	//Process_System_Alarm_States();
+	Process_System_Alarm_States();
 	
-	//Process_State_Machine();
+	Process_State_Machine();
 
 	//MONITOR.printf("Exiting State Machine\n");
 	
