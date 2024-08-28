@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>  // Include to use variable argument functions
 #include <string.h>
 #include "display.hpp"
 #include "input.hpp"
@@ -141,7 +142,6 @@ bool UpdateDoorFlag = false;
 #define PARKED	1
 
 bool GoToMenuFlag = false;
-bool redrawFlag = false;
 
 
 vim_data data_global;
@@ -422,16 +422,16 @@ Timer COMReset_Timer;
 Timer COMError_Timer;
 Timer InitialPowerUp_Timer;
 Timer VIMAlarm_Timer;
+Timer MainLoop_Timer;
 
 //================================================== Alarm Stuff =========================================
 
+//#define ALARM_MANUAL_CONTROL
 
 enum AlarmState {a_None,a_PreAlarm,a_FullAlarm,a_Snooze,a_Init};
 AlarmState Previous_System_Alarm_State = AlarmState::a_None;
 AlarmState Current_System_Alarm_State = AlarmState::a_None;
 bool AlarmStateEnabled = false;
-
-#define SYNC_ALARM_STATES() Previous_System_Alarm_State = Current_System_Alarm_State
 
 #define AlarmTextMaxChars 50
 String PreAlertText = "";
@@ -445,18 +445,18 @@ bool UpdatePreAlarmFlag = false;
 long PreAlarmTriggerTime;
 int CurrentPreAlarmCounter = 0;
 int PreviousPreAlarmCounter = 0;
-int MaxPreAlarmTime = 10; // TODO: REVERT THIS VALUE BACK TO NORMAL 61; // add 1 to account for decimal truncation
-#define SystemAlarmTimerVal 10000 // TODO: REVERT THIS VALUE BACK TO NORMAL 61000; // Manual Conversion of MaxPreAlarmTime to ms, Shouldn't have to do this but it was the only way to keep the variable from overflowing
-#define DisplayPreAlarmCounter_Default 10 // TODO: REVERT THIS VALUE BACK TO NORMAL 60
+int MaxPreAlarmTime = 61; // TODO: REVERT THIS VALUE BACK TO NORMAL 61; // add 1 to account for decimal truncation
+#define SystemAlarmTimerVal 61000 // TODO: REVERT THIS VALUE BACK TO NORMAL 61000; // Manual Conversion of MaxPreAlarmTime to ms, Shouldn't have to do this but it was the only way to keep the variable from overflowing
+#define DisplayPreAlarmCounter_Default 60 // TODO: REVERT THIS VALUE BACK TO NORMAL 60
 int DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
 
 bool UpdateSnoozeAlarmFlag = false;
 long SnoozeAlarmTriggerTime;
 int CurrentSnoozeAlarmCounter = 0;
 int PreviousSnoozeAlarmCounter = 0;
-int MaxSnoozeAlarmTime = 15; // TODO: REVERT THIS VALUE BACK TO NORMAL 480; // 8mins = 480s 
-#define SnoozeAlarmTimerVal 15000 // TODO: REVERT THIS VALUE BACK TO NORMAL 480000; // Manual Conversion of MaxPreAlarmTime to ms, Shouldn't have to do this but it was the only way to keep the variable from overflowing
-#define DisplaySnoozeAlarmCounter_Default 15 // TODO: REVERT THIS VALUE BACK TO NORMAL 480
+int MaxSnoozeAlarmTime = 61; // TODO: REVERT THIS VALUE BACK TO NORMAL 480; // 8mins = 480s 
+#define SnoozeAlarmTimerVal 61000 // TODO: REVERT THIS VALUE BACK TO NORMAL 480000; // Manual Conversion of MaxPreAlarmTime to ms, Shouldn't have to do this but it was the only way to keep the variable from overflowing
+#define DisplaySnoozeAlarmCounter_Default 60 // TODO: REVERT THIS VALUE BACK TO NORMAL 480
 long DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
 
 bool UpdateFullAlarmFlag = false;
@@ -471,10 +471,8 @@ bool System_Test_Alarm_Active = false;
 #define COLOR_BLUE		0x00FFFF
 #define COLOR_GREEN		0x90EE90
 
-
 void Init_Timers()
 {
-
 	// Initialize Timers
 	
 	// Read_IBoxPopped_Timer State Initialization
@@ -567,6 +565,11 @@ void Init_Timers()
 	VIMAlarm_Timer.Threshold = 300000; // 5min = 300 s = 300,000 ms
 	VIMAlarm_Timer.TimerEnable = false;
 	
+	// MainLoop_Timer
+	MainLoop_Timer.Name = "MainLoop_Timer";
+	MainLoop_Timer.OverFlowFlag = false;
+	MainLoop_Timer.Threshold = 1500; // 1s = 1,000 ms
+	MainLoop_Timer.TimerEnable = true;
 
 }
 
@@ -609,7 +612,7 @@ void Update_Timers()
 	COMReset_Timer.CheckOverflow();
 	InitialPowerUp_Timer.CheckOverflow();
 	VIMAlarm_Timer.CheckOverflow();
-	
+	MainLoop_Timer.CheckOverflow();
 }
 
 void Init_SystemStates()
@@ -1395,11 +1398,242 @@ void set_ALM(bool value)
     digitalWrite(ACECON_ALM_OUT,value);
 }
 
+void Sync_Alarm_States(){
+
+	MONITOR.print("Previous Alarm State - ");
+	switch (Previous_System_Alarm_State)
+	{
+	case a_None:
+		MONITOR.println("None");
+		break;
+	case a_Init:
+		MONITOR.println("Init");
+		break;
+	case a_PreAlarm:
+		MONITOR.println("PreAlarm");
+		break;
+	case a_FullAlarm:
+		MONITOR.println("FullAlarm");
+		break;
+	case a_Snooze:
+		MONITOR.println("Snooze");
+		break;
+	
+	default:
+		break;
+	}
+
+	MONITOR.print("Current Alarm State - ");
+	switch (Current_System_Alarm_State)
+	{
+	case a_None:
+		MONITOR.println("None");
+		break;
+	case a_Init:
+		MONITOR.println("Init");
+		break;
+	case a_PreAlarm:
+		MONITOR.println("PreAlarm");
+		break;
+	case a_FullAlarm:
+		MONITOR.println("FullAlarm");
+		break;
+	case a_Snooze:
+		MONITOR.println("Snooze");
+		break;
+	
+	default:
+		break;
+	}
+
+	MONITOR.println("Syncing Alarm States");
+	Previous_System_Alarm_State = Current_System_Alarm_State;
+
+}
+
+void Set_Alarm_State(AlarmState alarm){
+
+	Sync_Alarm_States();
+
+	#ifdef ALARM_MANUAL_CONTROL
+		MONITOR.print("Manual Alarm: Ignoring request - ");
+	#else
+		MONITOR.print("Set Alarm State: ");
+		Current_System_Alarm_State = alarm;
+	#endif
+
+	switch (alarm) {
+		case a_None:
+			MONITOR.println("a_None");
+			break;
+		case a_PreAlarm:
+			MONITOR.println("a_PreAlarm");
+			break;
+		case a_FullAlarm:
+			MONITOR.println("a_FullAlarm");
+			break;
+		case a_Snooze:
+			MONITOR.println("a_Snooze");
+			break;
+		// Add other cases as needed
+		default:
+			MONITOR.println("Unknown");
+			break;
+	}
+
+}
+
+void ui_update_alarms(){
+	// MONITOR.println("ui update alarms");
+	// if (Current_System_Alarm_State == AlarmState::a_None)
+	// {
+	// 	// Check if the Alarm State has changed
+	// 	if (Previous_System_Alarm_State != Current_System_Alarm_State)
+	// 	{
+	// 		MONITOR.println("Current Alarm State: None");
+
+			
+
+	// 	}
+
+	// }
+	// else if (Current_System_Alarm_State == AlarmState::a_PreAlarm)
+	// {
+		
+
+	// 	// Check if the Alarm State has changed
+	// 	if (Previous_System_Alarm_State != Current_System_Alarm_State)
+	// 	{
+
+	// 	}
+
+	// 	if (UpdatePreAlarmFlag == true)
+	// 	{
+	// 		UpdatePreAlarmFlag = false;
+
+			
+
+	// 		// static char szPreAlarmCounter[6];
+	// 		// sprintf(szPreAlarmCounter,"%3i",DisplayPreAlarmCounter);
+
+	// 		// lv_label_set_text(ui_LabelAlarmCounter, szPreAlarmCounter);
+
+	// 	}
+
+	// }
+	// else if (Current_System_Alarm_State == AlarmState::a_Snooze)
+	// {
+	// 	MONITOR.println("Current Alarm State: Snooze");
+		
+	// 	String strText;
+	// 	char Text[AlarmTextMaxChars];
+	// 	char timerOutput[9]; // "HH:MM:SS" is 8 characters + null terminator
+
+	// 	// Check if the Alarm State has changed
+	// 	if (Previous_System_Alarm_State != Current_System_Alarm_State)
+	// 	{
+			
+
+	// 	}
+
+	// 	if (UpdateSnoozeAlarmFlag == true)
+	// 	{
+	// 		UpdateSnoozeAlarmFlag = false;
+
+	// 		// Display PreAlarm Counter
+			
+
+	// 	}
+
+	// }
+	// else if (Current_System_Alarm_State == AlarmState::a_FullAlarm)
+	// 	{
+
+			
+
+	// 		// Check if the Alarm State has changed
+	// 		if (Previous_System_Alarm_State != Current_System_Alarm_State)
+	// 		{
+
+				
+
+	// 		}
+
+	// 		if (UpdateFullAlarmFlag == true)
+	// 		{
+	// 			UpdateFullAlarmFlag = false;
+
+				
+
+	// 		}
+
+	// 	}
+
+
+}
+
+void convertToTimerFormat_H_M_S(long seconds, char* buffer) {
+  int hours = seconds / 3600;           // Calculate the hours
+  int minutes = (seconds % 3600) / 60;  // Calculate the remaining minutes
+  int secs = seconds % 60;              // Calculate the remaining seconds
+
+  // Format the time as Hr:Min:Sec and store it in the buffer
+  snprintf(buffer, 9, "%02d:%02d:%02d", hours, minutes, secs);
+}
+
+void convertToTimerFormat_M_S(long seconds, char* buffer) {
+  //int hours = seconds / 3600;           // Calculate the hours
+  int minutes = (seconds % 3600) / 60;  // Calculate the remaining minutes
+  int secs = seconds % 60;              // Calculate the remaining seconds
+
+  // Format the time as Hr:Min:Sec and store it in the buffer
+  snprintf(buffer, 6, "%02d:%02d", minutes, secs);
+}
+
+void ui_Alarm_PreAlarm_Initial(){
+
+	String strText;
+	char Text[AlarmTextMaxChars];
+
+	MONITOR.println("Current Alarm State: PreAlarm");
+	lv_obj_clear_flag(ui_BtnSnooze,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(ui_LabelAlarmText,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(ui_LabelAlarmCounter,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(ui_LabelAlarmTextExtra,LV_OBJ_FLAG_HIDDEN);
+
+	MONITOR.println("PreAlertText: " + PreAlertText);
+	PreAlertText.toCharArray(Text,sizeof(Text));
+	Text[sizeof(Text) - 1] = '\0';
+
+	lv_label_set_text(ui_LabelAlarmText, Text);
+
+	
+	strText = "SNOOZE";
+	strText.toCharArray(Text,sizeof(Text));
+	Text[sizeof(Text) - 1] = '\0';
+
+	lv_label_set_text(ui_LabelAlarmTextExtra, Text);
+
+
+	DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
+
+	static char szPreAlarmCounter[6];
+	convertToTimerFormat_M_S(DisplayPreAlarmCounter, szPreAlarmCounter);
+	lv_label_set_text(ui_LabelAlarmCounter, szPreAlarmCounter);
+}
+
+void ui_Alarm_PreAlarm_Update(){
+
+	char timerOutput[6]; // "HH:MM:SS" is 8 characters + null terminator
+	convertToTimerFormat_M_S(DisplayPreAlarmCounter, timerOutput);
+	lv_label_set_text(ui_LabelAlarmCounter, timerOutput);
+}
+
 void handlePreAlarmState(){
 
 	if (Previous_System_Alarm_State != AlarmState::a_PreAlarm)
 	{
-		MONITOR.println("Transitioning to PreAlarm state");
+		MONITOR.println("Transitioned to PreAlarm state");
 
 		// Send HPT(ALM) Signal
 		set_ALM(LOW);
@@ -1420,7 +1654,10 @@ void handlePreAlarmState(){
 		MONITOR.printf("SystemAlarm_Timer started with threshold %lu\n", SystemAlarm_Timer.Threshold);
 
 		// Set Prev State
-		SYNC_ALARM_STATES();
+		Sync_Alarm_States();
+		
+		ui_Alarm_PreAlarm_Initial();
+
 	}
 
 	// Check if the Alarm conditions have been cleared
@@ -1444,17 +1681,14 @@ void handlePreAlarmState(){
 
 		// Disable Pre Alarm Notification Timer
 		PreAlarmNotification_Timer.StopTimer();
-		MONITOR.println("PreAlarmNotification_Timer stopped");
 
 		// Clear the OverFlow Flag and Disable the Timer
 		SystemAlarm_Timer.StopTimer();
-		MONITOR.println("SystemAlarm_Timer stopped");
 		DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
 
 		// Set Alarm to None
-		SYNC_ALARM_STATES();
-		Current_System_Alarm_State = AlarmState::a_None;
-		MONITOR.println("Transitioning to None state from PreAlarm");
+		Set_Alarm_State(AlarmState::a_None);
+		
 	}
 	// Check if the alarm needs to graduate to full
 	else if (SystemAlarm_Timer.OverFlowFlag == true)
@@ -1479,9 +1713,8 @@ void handlePreAlarmState(){
 		PreAlarmNotification_Timer.StopTimer();
 		DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
 
-		SYNC_ALARM_STATES();
-		Current_System_Alarm_State = AlarmState::a_FullAlarm;
-		MONITOR.println("Transitioned to FullAlarm from PreAlarm");
+		Set_Alarm_State(AlarmState::a_FullAlarm);
+		MONITOR.println("Transitioning to FullAlarm from PreAlarm");
 	}
 	// Check if the Countdown Timer needs to be updated
 	else if (PreAlarmNotification_Timer.OverFlowFlag == true)
@@ -1497,13 +1730,11 @@ void handlePreAlarmState(){
 	// Check if the counter has changed enough to warrant an update to the screen
 	
 	CurrentPreAlarmCounter = static_cast<int>((millis() - PreAlarmTriggerTime) / 1000);
-	
+	MONITOR.printf("CurrentPreAlarmCounter updated to %d\n", CurrentPreAlarmCounter);
+
 	if (CurrentPreAlarmCounter != PreviousPreAlarmCounter)
 	{
 		PreviousPreAlarmCounter = CurrentPreAlarmCounter;
-
-		// Set General Update Flag
-		data_global.updateIcons = true;
 
 		// Update Display Counter
 		DisplayPreAlarmCounter = MaxPreAlarmTime - CurrentPreAlarmCounter;
@@ -1512,10 +1743,55 @@ void handlePreAlarmState(){
 		// Make sure it doesn't go below zero
 		if (DisplayPreAlarmCounter < 0) { DisplayPreAlarmCounter = 0; }
 
-		UpdatePreAlarmFlag = true;
-		data_global.updateIcons = true;
+		ui_Alarm_PreAlarm_Update();
+
 	}
 
+}
+
+void ui_Alarm_Snooze_Initial(){
+
+	String strText;
+	char Text[AlarmTextMaxChars];
+	char timerOutput[6]; // "MM:SS" is 5 characters + null terminator
+
+	lv_obj_add_flag(ui_BtnSnooze,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(ui_LabelAlarmText,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(ui_LabelAlarmCounter,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(ui_LabelAlarmTextExtra,LV_OBJ_FLAG_HIDDEN);
+
+	PreAlertText.toCharArray(Text,sizeof(Text));
+	Text[sizeof(Text) - 1] = '\0';
+
+	lv_label_set_text(ui_LabelAlarmText, Text);
+
+	
+	strText = "SNOOZED";
+	strText.toCharArray(Text,sizeof(Text));
+	Text[sizeof(Text) - 1] = '\0';
+
+	lv_label_set_text(ui_LabelAlarmTextExtra, Text);
+
+
+	DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
+
+	// Convert the counter to Hr:Min:Sec format
+	
+	convertToTimerFormat_M_S(DisplaySnoozeAlarmCounter, timerOutput);
+
+	lv_label_set_text(ui_LabelAlarmCounter, timerOutput);
+
+	// Set_SoundPulse(PulseProfile::pp_TripleBeep);
+
+}
+
+void ui_Alarm_Snooze_Update(){
+
+	char timerOutput[6]; // "MM:SS" is 5 characters + null terminator
+	
+	convertToTimerFormat_M_S(DisplaySnoozeAlarmCounter, timerOutput);
+
+	lv_label_set_text(ui_LabelAlarmCounter, timerOutput);
 }
 
 void handleSnoozeState(){
@@ -1539,7 +1815,9 @@ void handleSnoozeState(){
 		MONITOR.printf("SnoozeAlarm_Timer started with threshold %lu\n", SnoozeAlarm_Timer.Threshold);
 
 		// Set Prev State
-		SYNC_ALARM_STATES();
+		Sync_Alarm_States();
+		
+		ui_Alarm_Snooze_Initial();
 	}
 
 	// Check if all Alarm conditions have been cleared
@@ -1559,12 +1837,10 @@ void handleSnoozeState(){
 		if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
 
 		// Set the General Update Flag
-		redrawFlag = true;
+		data_global.updateIcons = true;
 
 		// Set Alarm to None
-		SYNC_ALARM_STATES();
-		Current_System_Alarm_State = AlarmState::a_None;
-		MONITOR.println("Transitioning to None state from Snooze");
+		Set_Alarm_State(AlarmState::a_None);
 	}
 
 	// Check if the Snooze Timer has Overflowed
@@ -1584,17 +1860,15 @@ void handleSnoozeState(){
 		if (data_global.Aux1Input_current == true || data_global.Aux2Input_current == true) { data_global.aux_changed = true; }
 
 		// Set the General Update Flag
-		redrawFlag = true;
+		data_global.updateIcons = true;
 
 		// Clear the OverFlow Flag and Disable the Timer
 		SnoozeAlarm_Timer.StopTimer();
-		MONITOR.println("SnoozeAlarm_Timer stopped");
 		DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
 
 		// Set Alarm to Full
-		SYNC_ALARM_STATES();
-		Current_System_Alarm_State = AlarmState::a_PreAlarm;
-		MONITOR.println("Transitioned to PreAlarm from Snooze");
+		Set_Alarm_State(AlarmState::a_PreAlarm);
+		
 	}
 
 	// Check if the counter has changed enough to warrant an update to the screen
@@ -1606,9 +1880,6 @@ void handleSnoozeState(){
 	{
 		PreviousSnoozeAlarmCounter = CurrentSnoozeAlarmCounter;
 
-		// Set General Update Flag
-		redrawFlag = true;
-
 		// Update Display Counter
 		DisplaySnoozeAlarmCounter = MaxSnoozeAlarmTime - CurrentSnoozeAlarmCounter;
 		MONITOR.printf("DisplaySnoozeAlarmCounter updated to %d\n", DisplaySnoozeAlarmCounter);
@@ -1616,16 +1887,61 @@ void handleSnoozeState(){
 		// Make sure it doesn't go below zero
 		if (DisplaySnoozeAlarmCounter < 0) { DisplaySnoozeAlarmCounter = 0; }
 
-		UpdateSnoozeAlarmFlag = true;
+		ui_Alarm_Snooze_Update();
+
 	}
 
+}
+
+void ui_Alarm_FullAlarm_Initial(){
+
+	String strText;
+	char Text[AlarmTextMaxChars];
+	char timerOutput[6]; // "MM:SS" is 5 characters + null terminator
+
+	MONITOR.println("Current Alarm State: FullAlarm");
+	lv_obj_clear_flag(ui_BtnSnooze,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(ui_LabelAlarmText,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(ui_LabelAlarmCounter,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(ui_LabelAlarmTextExtra,LV_OBJ_FLAG_HIDDEN);
+
+	FullAlarmText.toCharArray(Text,sizeof(Text));
+	Text[sizeof(Text) - 1] = '\0';
+
+	lv_label_set_text(ui_LabelAlarmText, Text);
+
+	
+	strText = "SNOOZE";
+	strText.toCharArray(Text,sizeof(Text));
+	Text[sizeof(Text) - 1] = '\0';
+
+	lv_label_set_text(ui_LabelAlarmTextExtra, Text);
+
+
+	CurrentFullAlarmCounter = 0;
+
+	// Convert the counter to Hr:Min:Sec format
+	
+	convertToTimerFormat_M_S(CurrentFullAlarmCounter, timerOutput);
+
+	lv_label_set_text(ui_LabelAlarmCounter, timerOutput);
+
+}
+
+void ui_Alarm_FullAlarm_Update(){
+	
+	char timerOutput[6]; // "HH:MM:SS" is 8 characters + null terminator
+
+	convertToTimerFormat_M_S(CurrentFullAlarmCounter, timerOutput);
+
+	lv_label_set_text(ui_LabelAlarmCounter, timerOutput);
 }
 
 void handleFullAlarmState(){
 
 	if (Previous_System_Alarm_State != AlarmState::a_FullAlarm)
 	{
-		MONITOR.println("Transitioning to FullAlarm state");
+		MONITOR.println("Transitioned to FullAlarm state");
 
 		// Emit Alarm Pulse
 		//Set_SoundPulse(PulseProfile::pp_SystemTest);
@@ -1642,7 +1958,8 @@ void handleFullAlarmState(){
 		MONITOR.printf("FullAlarmTriggerTime set to %lu\n", FullAlarmTriggerTime);
 
 		// Set Prev State
-		SYNC_ALARM_STATES();
+		Sync_Alarm_States();
+		ui_Alarm_FullAlarm_Initial();
 	}
 
 	// Check if all Alarm conditions have been cleared and System Test is not Active. If System test is active then that will be handled by the system test state
@@ -1662,15 +1979,14 @@ void handleFullAlarmState(){
 		if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
 
 		// Set the General Update Flag
-		redrawFlag = true;
+		data_global.updateIcons = true;
 
 		// Disable Timer and Clear OverFlow Flag
 		SystemAlarm_Timer.StopTimer();
 		MONITOR.println("SystemAlarm_Timer stopped");
 
 		// Set Alarm to None
-		SYNC_ALARM_STATES();
-		Current_System_Alarm_State = AlarmState::a_None;
+		Set_Alarm_State(AlarmState::a_None);
 		MONITOR.println("Transitioning to None state from FullAlarm");
 	}
 
@@ -1684,9 +2000,17 @@ void handleFullAlarmState(){
 		// Set Flag so display gets updated
 		UpdateFullAlarmFlag = true;
 		// Set General Update Flag
-		redrawFlag = true;
+		ui_Alarm_FullAlarm_Update();
 	}
 
+}
+
+void ui_Alarm_None_Initial(){
+
+	lv_obj_add_flag(ui_BtnSnooze,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(ui_LabelAlarmText,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(ui_LabelAlarmCounter,LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(ui_LabelAlarmTextExtra,LV_OBJ_FLAG_HIDDEN);
 }
 
 void handleNoneState(){
@@ -1718,7 +2042,11 @@ void handleNoneState(){
 		MONITOR.println("All alarm-related timers stopped");
 
 		// Set Prev State
-		SYNC_ALARM_STATES();
+		Sync_Alarm_States();
+		
+		// Draw Alarm UI
+		ui_Alarm_None_Initial();
+
 	}
 
 	// Check Battery, Stall, Temp Alarm, Aux
@@ -1738,28 +2066,26 @@ void handleNoneState(){
 		if (data_global.Aux1Input_previous == true || data_global.Aux2Input_previous == true) { data_global.aux_changed = true; }
 
 		// Set the General Update Flag
-		redrawFlag = true;
+		data_global.updateIcons = true;
 
-		if (systemsettings_current.AutoSnoozeEnabled == true) { MONITOR.println("AutoSnooze is enabled"); }
-		if (systemsettings_current.InitialPowerUpFlag == true) { MONITOR.println("InitialPowerUpFlag is set"); }
+		if (systemsettings_current.AutoSnoozeEnabled == true) { 
+			MONITOR.println("AutoSnooze is enabled"); 
+			}
+		if (systemsettings_current.InitialPowerUpFlag == true) {
+			 MONITOR.println("InitialPowerUpFlag is set"); 
+			 }
 
 		// AUTOSNOOZE FUNCTIONALITY HERE
 		// If the system has just woken up then go to snooze
 		if (systemsettings_current.InitialPowerUpFlag == true && systemsettings_current.AutoSnoozeEnabled == true)
 		{
-			MONITOR.println("AutoSnooze Triggered, transitioning to Snooze state");
-
 			// Go to Snooze Alarm State
-			SYNC_ALARM_STATES();
-			Current_System_Alarm_State = AlarmState::a_Snooze;
+			Set_Alarm_State(AlarmState::a_Snooze);
 		}
 		else
 		{
-			MONITOR.println("PreAlarm Triggered, transitioning to PreAlarm state");
-
 			// Set Alarm to Pre ALarm
-			SYNC_ALARM_STATES();
-			Current_System_Alarm_State = AlarmState::a_PreAlarm;
+			Set_Alarm_State(AlarmState::a_PreAlarm);
 		}
 	}
 }
@@ -1771,10 +2097,16 @@ void Process_System_Alarm_States()
 	// Make Sure Alarms are enabled (this is state dependant)
 	if (AlarmStateEnabled == false)
 	{
-		MONITOR.println("Alarm State Disabled");
-		Current_System_Alarm_State = AlarmState::a_None; // Set to none
-		Previous_System_Alarm_State = AlarmState::a_Init; // Setting previous to anything other than none will ensure that the alarm states will disable
+		
+		if (Current_System_Alarm_State == AlarmState::a_None && Previous_System_Alarm_State == AlarmState::a_Init){
 
+		}else{
+			MONITOR.println("Alarm State Disabled");
+			Current_System_Alarm_State = AlarmState::a_None; // Set to none
+			Previous_System_Alarm_State = AlarmState::a_Init; // Setting previous to anything other than none will ensure that the alarm states will disable
+
+		}
+		
 	}
 	else
 	{
@@ -1814,7 +2146,7 @@ void Reset_System_Alarm_State()
 	Previous_System_Alarm_State = AlarmState::a_None;
 	Current_System_Alarm_State = AlarmState::a_None;
 
-	//MONITOR.println("Alarm set to None");
+	MONITOR.println("Alarm set to None");
 	//Set_SoundPulse(PulseProfile::pp_NoSound);
 
 	// Clear HPT(ALM) Signal
@@ -1885,7 +2217,7 @@ void Check_IBoxPopped()
 	// 			}
 
 
-	// 			redrawFlag = true;
+	// 			data_global.updateIcons = true;
 	// 			UpdateDoorFlag = true;
 
 	// 			// Start Timer
@@ -1914,7 +2246,7 @@ void Check_IBoxPopped()
 
 	// 		Current_DoorPopTrigger = DoorPopTrigger::dt_None;
 	// 		CurrentDoorPopCondition = DoorPopCondition::dc_Unpopped;
-	// 		redrawFlag = true;
+	// 		data_global.updateIcons = true;
 	// 		UpdateDoorFlag = true;
 
 	// 	}
@@ -1932,10 +2264,11 @@ void Check_IBoxPopped()
 
 void send_init_packet() {
     int len = strlen(INIT_CSV_CSV);
+	MONITOR.println(INIT_CSV_CSV);
     char* sz = (char*)malloc(6+len)+5;
     strcpy(sz,INIT_CSV_CSV);
     if(sz==(char*)5) {
-        //MONITOR.println("Out of memory. Tough luck.");
+        MONITOR.println("Out of memory. Tough luck.");
         return;
     }
     sz[len]=0;
@@ -2518,6 +2851,22 @@ void on_monitor_delete_file(const char* str) {
     
 }
 
+void on_monitor_alarm_none(const char* str){
+	Current_System_Alarm_State = AlarmState::a_None;
+}
+
+void on_monitor_alarm_prealarm(const char* str){
+	Current_System_Alarm_State = AlarmState::a_PreAlarm;
+}
+
+void on_monitor_alarm_snooze(const char* str){
+	Current_System_Alarm_State = AlarmState::a_Snooze;
+}
+
+void on_monitor_alarm_fullalarm(const char* str){
+	Current_System_Alarm_State = AlarmState::a_FullAlarm;
+}
+
 void monitor_dev_tick(HardwareSerial& s) {
     if(s.available()) {
         String str = s.readString();
@@ -2559,8 +2908,16 @@ void monitor_dev_tick(HardwareSerial& s) {
             save_settings();
         } else if (cmd=="report settings"){
             print_settings();
-        }else if (cmd=="fota loop begin"){
+        } else if (cmd=="fota loop begin"){
             on_monitor_fota_loop_begin(str.c_str());
+        } else if (cmd=="alarm none"){
+            on_monitor_alarm_none(str.c_str());
+        } else if (cmd=="alarm prealarm"){
+            on_monitor_alarm_prealarm(str.c_str());
+        } else if (cmd=="alarm snooze"){
+            on_monitor_alarm_snooze(str.c_str());
+        } else if (cmd=="alarm fullalarm"){
+            on_monitor_alarm_fullalarm(str.c_str());
         }
     }
 }
@@ -2570,25 +2927,14 @@ float ConvertFtoC(float F)
 	return (round((F - 32) * (5.0 / 9)));
 }
 
-void convertToTimerFormat(long seconds, char* buffer) {
-  int hours = seconds / 3600;           // Calculate the hours
-  int minutes = (seconds % 3600) / 60;  // Calculate the remaining minutes
-  int secs = seconds % 60;              // Calculate the remaining seconds
+void ui_update_acecon() {
 
-  // Format the time as Hr:Min:Sec and store it in the buffer
-  snprintf(buffer, 9, "%02d:%02d:%02d", hours, minutes, secs);
-}
-
-void ui_update_acecon_alarms() {
-
+	MONITOR.println("ui update acecon");
 	data_global = vim_load();
 
-	PreAlertText = "";
-	FullAlarmText = "";
-
     if (data_global.temp_changed || data_global.units_changed){
-        ////MONITOR.println("UI: Temp Values Need Updating");
-        redrawFlag = true;
+        MONITOR.println("UI: Temp Values Need Updating");
+        data_global.updateIcons = true;
 
         if(data_global.leftTemp_previous!=data_global.leftTemp_current || data_global.units_changed) {
             ////MONITOR.println("UI: Updating Left Temp");
@@ -2691,54 +3037,70 @@ void ui_update_acecon_alarms() {
 		// Check Temperature Values are within range
 		if (systemsettings_current.TempAveragingEnabled == true)
 		{
+			MONITOR.println("Temp Averaging Enabled");
 			// Sensor 1
 			if (data_global.leftTemp_current >= (HotTempOpt_F[systemsettings_current.AlarmHotSetIndex]) + SingleTempOverrideAmount)
 			{
+				MONITOR.println("Left Temp: Over");
+
 				PreAlertText = "HOT ALERT";
 				FullAlarmText = "HOT  ALARM";
 				data_global.leftTempState = TempState::tst_OverPlus;
 			}
 			else if (data_global.leftTemp_current >= ((HotTempOpt_F[systemsettings_current.AlarmHotSetIndex]) + SingleTempOverrideAmount) - TempWarningOffset)
 			{
+				MONITOR.println("Left Temp: Warning");
 				data_global.leftTempState = TempState::tst_Warning;
 			}
 			else if (systemsettings_current.ColdAlarmEnabled == true && data_global.leftTemp_current <= ColdTempOpt_F[systemsettings_current.AlarmColdSetIndex])
 			{
+				MONITOR.println("Left Temp: Under");
+
 				PreAlertText = "COLD ALERT";
 				FullAlarmText = "COLD  ALARM";
 				data_global.leftTempState = TempState::tst_Under;
 			}
 			else
 			{
+				PreAlertText = "";
+				FullAlarmText = "";
+				MONITOR.println("Left Temp: OK");
 				data_global.leftTempState = TempState::tst_OK;
 			}
 
 			// Sensor 2
 			if (data_global.rightTemp_current >= (HotTempOpt_F[systemsettings_current.AlarmHotSetIndex]) + SingleTempOverrideAmount)
 			{
+				MONITOR.println("Right Temp: Over");
 				PreAlertText = "HOT ALERT";
 				FullAlarmText = "HOT  ALARM";
 				data_global.rightTempState = TempState::tst_OverPlus;
 			}
 			else if (data_global.rightTemp_current >= ((HotTempOpt_F[systemsettings_current.AlarmHotSetIndex]) + SingleTempOverrideAmount) - TempWarningOffset)
 			{
+				MONITOR.println("Right Temp: Warning");
 				data_global.rightTempState = TempState::tst_Warning;
 			}
 			else if (systemsettings_current.ColdAlarmEnabled == true && data_global.rightTemp_current <= ColdTempOpt_F[systemsettings_current.AlarmColdSetIndex])
 			{
+				MONITOR.println("Right Temp: Under");
 				PreAlertText = "COLD ALERT";
 				FullAlarmText = "COLD  ALARM";
 				data_global.rightTempState = TempState::tst_Under;
 			}
 			else
 			{
+				PreAlertText = "";
+				FullAlarmText = "";
+				MONITOR.println("Right Temp: OK");
 				data_global.rightTempState = TempState::tst_OK;
 			}
-
 
 			// Check if the Average Value is out of range
 			if (data_global.avgTemp >= HotTempOpt_F[systemsettings_current.AlarmHotSetIndex])
 			{
+				MONITOR.println("Average Temp: Over");
+
 				PreAlertText = "HOT ALERT";
 				FullAlarmText = "HOT  ALARM";
 				
@@ -2746,16 +3108,21 @@ void ui_update_acecon_alarms() {
 			}
 			else if (data_global.avgTemp >= (HotTempOpt_F[systemsettings_current.AlarmHotSetIndex] - TempWarningOffset))
 			{
+				MONITOR.println("Average Temp: Warning");
 				data_global.avgTempState = TempState::tst_Warning;
 			}
 			else if (systemsettings_current.ColdAlarmEnabled == true && data_global.avgTemp <= ColdTempOpt_F[systemsettings_current.AlarmColdSetIndex])
 			{
 				PreAlertText = "COLD ALERT";
 				FullAlarmText = "COLD  ALARM";
+				MONITOR.println("Average Temp: Under");
 				data_global.avgTempState = TempState::tst_Under;
 			}
 			else
 			{
+				PreAlertText = "";
+				FullAlarmText = "";
+				MONITOR.println("Average Temp: OK");
 				data_global.avgTempState = TempState::tst_OK;
 			}
 
@@ -2915,19 +3282,20 @@ void ui_update_acecon_alarms() {
 			data_global.rightTempError_current != data_global.rightTempError_previous)
 		{
 			
+			data_global.updateIcons = true;
 
 		}
 
         if (data_global.units_changed){
 
-			redrawFlag = true;
+			data_global.updateIcons = true;
 
             data_global.units_changed = false;
         }
         
 		if (data_global.temp_changed){
 
-			redrawFlag = true;
+			data_global.updateIcons = true;
 
             data_global.temp_changed = false;
         }
@@ -2937,7 +3305,7 @@ void ui_update_acecon_alarms() {
 
     if (data_global.engine_changed){
         ////MONITOR.println("UI: Engine Values Need Updating");
-        redrawFlag = true;
+        data_global.updateIcons = true;
 
         ////MONITOR.println("UI: Updating Ignition");
         if (data_global.ignitionOn_current) {
@@ -2972,7 +3340,7 @@ void ui_update_acecon_alarms() {
     
     if (data_global.battchanged){
         ////MONITOR.println("UI: Temp Values Need Updating");
-        redrawFlag = true;
+        data_global.updateIcons = true;
 
         if (data_global.batt_error_current == true){
 			PreAlertText = "LO BATT ALERT";
@@ -2987,7 +3355,7 @@ void ui_update_acecon_alarms() {
 
     if (data_global.k9_door_changed){
 
-        redrawFlag = true;
+        data_global.updateIcons = true;
 
         if (systemsettings_current.doorDisabled){
             //MONITOR.println("UI: Door Disabled");
@@ -3020,7 +3388,7 @@ void ui_update_acecon_alarms() {
     }
 
     if (xbee_signal_strength_changed){
-        redrawFlag = true;
+        data_global.updateIcons = true;
 
         //MONITOR.print("Changing WiFi Icon:");
 
@@ -3064,188 +3432,19 @@ void ui_update_acecon_alarms() {
         xbee_signal_strength_changed = false;
     }
 
-    // Redraw Screen
-	// Alarm triggers set the redraw flag so put the alarms in here
+	vim_store(data_global);
+       
+}
 
-    if(redrawFlag){
-        //MONITOR.println("Processesing Alarm Screens");
-		
-		//Previous_System_Alarm_State = Current_System_Alarm_State;
+void ui_update_icons() {
 
-		if (Current_System_Alarm_State == AlarmState::a_None)
-			{
-				// Check if the Alarm State has changed
-				if (Previous_System_Alarm_State != Current_System_Alarm_State)
-				{
-					MONITOR.println("Current Alarm State: None");
-					lv_obj_add_flag(ui_BtnSnooze,LV_OBJ_FLAG_HIDDEN);
-					lv_obj_add_flag(ui_LabelAlarmText,LV_OBJ_FLAG_HIDDEN);
-					lv_obj_add_flag(ui_LabelAlarmCounter,LV_OBJ_FLAG_HIDDEN);
-					
-				}
+	data_global = vim_load();
 
-			}
-		else if (Current_System_Alarm_State == AlarmState::a_PreAlarm)
-		{
-			String strText;
-			char Text[AlarmTextMaxChars];
+    if(data_global.updateIcons){
 
-			// Check if the Alarm State has changed
-			if (Previous_System_Alarm_State != Current_System_Alarm_State)
-			{
-
-				MONITOR.println("Current Alarm State: PreAlarm");
-				lv_obj_clear_flag(ui_BtnSnooze,LV_OBJ_FLAG_HIDDEN);
-				lv_obj_clear_flag(ui_LabelAlarmText,LV_OBJ_FLAG_HIDDEN);
-				lv_obj_clear_flag(ui_LabelAlarmCounter,LV_OBJ_FLAG_HIDDEN);
-				lv_obj_clear_flag(ui_LabelAlarmTextExtra,LV_OBJ_FLAG_HIDDEN);
-
-				PreAlertText.toCharArray(Text,sizeof(Text));
-				Text[sizeof(Text) - 1] = '\0';
-
-				lv_label_set_text(ui_LabelAlarmText, Text);
-
-				
-				strText = "PRESS TO SNOOZE";
-				strText.toCharArray(Text,sizeof(Text));
-				Text[sizeof(Text) - 1] = '\0';
-
-				lv_label_set_text(ui_LabelAlarmTextExtra, Text);
-
-
-				DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
-
-				static char szPreAlarmCounter[6];
-				sprintf(szPreAlarmCounter,"%3.1f",DisplayPreAlarmCounter);
-
-				lv_label_set_text(ui_LabelAlarmCounter, szPreAlarmCounter);
-
-
-			}
-
-			if (UpdatePreAlarmFlag == true)
-			{
-				UpdatePreAlarmFlag = false;
-
-				static char szPreAlarmCounter[6];
-				sprintf(szPreAlarmCounter,"%3.1f",DisplayPreAlarmCounter);
-
-				lv_label_set_text(ui_LabelAlarmCounter, szPreAlarmCounter);
-
-			}
-
-		}
-		else if (Current_System_Alarm_State == AlarmState::a_Snooze)
-		{
-			MONITOR.println("Current Alarm State: Snooze");
-			String strText;
-			char Text[AlarmTextMaxChars];
-			char timerOutput[9]; // "HH:MM:SS" is 8 characters + null terminator
-
-			// Check if the Alarm State has changed
-			if (Previous_System_Alarm_State != Current_System_Alarm_State)
-			{
-				
-				lv_obj_clear_flag(ui_BtnSnooze,LV_OBJ_FLAG_HIDDEN);
-				lv_obj_clear_flag(ui_LabelAlarmText,LV_OBJ_FLAG_HIDDEN);
-				lv_obj_clear_flag(ui_LabelAlarmCounter,LV_OBJ_FLAG_HIDDEN);
-				lv_obj_clear_flag(ui_LabelAlarmTextExtra,LV_OBJ_FLAG_HIDDEN);
-
-				PreAlertText.toCharArray(Text,sizeof(Text));
-				Text[sizeof(Text) - 1] = '\0';
-
-				lv_label_set_text(ui_LabelAlarmText, Text);
-
-				
-				strText = "SNOOZING";
-				strText.toCharArray(Text,sizeof(Text));
-				Text[sizeof(Text) - 1] = '\0';
-
-				lv_label_set_text(ui_LabelAlarmTextExtra, Text);
-
-
-				DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
-
-				// Convert the counter to Hr:Min:Sec format
-				
-				convertToTimerFormat(DisplaySnoozeAlarmCounter, timerOutput);
-
-				lv_label_set_text(ui_LabelAlarmCounter, timerOutput);
-
-				// Set_SoundPulse(PulseProfile::pp_TripleBeep);
-
-			}
-
-			if (UpdateSnoozeAlarmFlag == true)
-			{
-				UpdateSnoozeAlarmFlag = false;
-
-				// Display PreAlarm Counter
-				
-				convertToTimerFormat(DisplaySnoozeAlarmCounter, timerOutput);
-
-				lv_label_set_text(ui_LabelAlarmCounter, timerOutput);
-
-			}
-
-		}
-		else if (Current_System_Alarm_State == AlarmState::a_FullAlarm)
-		{
-
-			String strText;
-			char Text[AlarmTextMaxChars];
-			char timerOutput[9]; // "HH:MM:SS" is 8 characters + null terminator
-
-			// Check if the Alarm State has changed
-			if (Previous_System_Alarm_State != Current_System_Alarm_State)
-			{
-
-				MONITOR.println("Current Alarm State: FullAlarm");
-				lv_obj_clear_flag(ui_BtnSnooze,LV_OBJ_FLAG_HIDDEN);
-				lv_obj_clear_flag(ui_LabelAlarmText,LV_OBJ_FLAG_HIDDEN);
-				lv_obj_clear_flag(ui_LabelAlarmCounter,LV_OBJ_FLAG_HIDDEN);
-				lv_obj_clear_flag(ui_LabelAlarmTextExtra,LV_OBJ_FLAG_HIDDEN);
-
-				FullAlarmText.toCharArray(Text,sizeof(Text));
-				Text[sizeof(Text) - 1] = '\0';
-
-				lv_label_set_text(ui_LabelAlarmText, Text);
-
-				
-				strText = "OK to CANCEL ";
-				strText.toCharArray(Text,sizeof(Text));
-				Text[sizeof(Text) - 1] = '\0';
-
-				lv_label_set_text(ui_LabelAlarmTextExtra, Text);
-
-
-				CurrentFullAlarmCounter = 0;
-
-				// Convert the counter to Hr:Min:Sec format
-				
-				convertToTimerFormat(DisplaySnoozeAlarmCounter, timerOutput);
-
-				lv_label_set_text(ui_LabelAlarmCounter, timerOutput);
-
-			}
-
-			if (UpdateFullAlarmFlag == true)
-			{
-				UpdateFullAlarmFlag = false;
-
-				convertToTimerFormat(DisplaySnoozeAlarmCounter, timerOutput);
-
-				lv_label_set_text(ui_LabelAlarmCounter, timerOutput);
-
-			}
-
-		}
-
-
-
-		//MONITOR.println("Redrawing Screen");
+		MONITOR.println("Redrawing Screen");
         lv_scr_load(lv_scr_act());
-        redrawFlag = false;
+        data_global.updateIcons = false;
 
     } 
 
@@ -3505,6 +3704,20 @@ static void ui_switch_handler(lv_event_t * e)
             set_HPS(checked?HIGH:LOW);
         }
     }
+}
+
+static void ui_snooze_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_CLICKED) {
+        
+		MONITOR.println("snooze button pressed");
+        Set_Alarm_State(a_Snooze);
+
+
+    }
+
 }
 
 static void menu_AlarmPower_handler(lv_event_t * e)
@@ -3861,7 +4074,7 @@ static void menu_TempUnits_handler(lv_event_t * e)
 
 	vim_store(data_global);
 
-    ui_update_acecon_alarms();
+    ui_update_acecon();
 
     }
 
@@ -3890,7 +4103,7 @@ static void menu_TempAveraging_handler(lv_event_t * e)
 
 	vim_store(data_global);
 
-    ui_update_acecon_alarms();
+    ui_update_acecon();
 
     }
 
@@ -3956,7 +4169,7 @@ static void menu_StallMonitor_handler(lv_event_t * e)
         }
             
         data_global.engine_changed = true;
-        ui_update_acecon_alarms();
+        ui_update_acecon();
 
     }
 
@@ -4486,12 +4699,14 @@ void acecon_dev_tick() {
 
 void check_door_condition(){
 
-	
+	data_global = vim_load();
+		
     // TODO: fill in Door POPPED and DOOR Disabled condition checks
     // Place Holder Values
     systemsettings_current.doorDisabled = false;
     data_global.k9_door_popped = false;
 
+	vim_store(data_global);
 }
 
 void check_cell_signal(){
@@ -4815,6 +5030,9 @@ void Process_State_Machine(){
 			// VIM Communications Timer
 			COMError_Timer.StartTimer(Comm_Error_Timeout);
 
+			// Enable Initial Power Up Timer
+			InitialPowerUp_Timer.StartTimer(InitialPowerUp_Timer.Threshold);
+
 			// Clear Alarm Enabled Flag
 			Reset_System_Alarm_State();
 			AlarmStateEnabled = false;
@@ -4833,7 +5051,7 @@ void Process_State_Machine(){
 			// Clear Initial Power Up Flag 
 			if (systemsettings_current.InitialPowerUpFlag == true)
 			{
-				if (InitialPowerUp_Timer.OverFlowFlag == true)
+				if (InitialPowerUp_Timer.CheckOverflow())
 				{
 					InitialPowerUp_Timer.OverFlowFlag = false;
 
@@ -4893,9 +5111,6 @@ void Process_State_Machine(){
 			{
 				COMError_Timer.StartTimer(Comm_Error_Timeout);
 			}
-
-			// Enable Initial Power Up Timer
-			InitialPowerUp_Timer.StartTimer(InitialPowerUp_Timer.Threshold);
 
 			// Set Alarm Enabled Flag
 			Reset_System_Alarm_State();
@@ -5952,7 +6167,14 @@ void setup() {
     lv_obj_add_event_cb(ui_SwitchPPS, ui_switch_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_SwitchALM, ui_switch_handler, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_SwitchHPS, ui_switch_handler, LV_EVENT_ALL, NULL);
+
+	//================================================== Alarm Screen Events =========================================*/
+    lv_obj_add_event_cb(ui_BtnSnooze, ui_snooze_handler, LV_EVENT_ALL, NULL);
+
+
     dimmer.max_level(.0625);
+
+
     //================================================== XBEE Setup =========================================*/
 #ifndef CUSTOM
     XBEE.begin(115200, SERIAL_8N1, 18, 17);
@@ -6035,13 +6257,15 @@ void setup() {
     data_global.engine_changed = true;
     data_global.k9_door_changed = true;
 
+	ui_Alarm_None_Initial();
+
     set_HPS(HIGH);
     set_PPS(HIGH);
 
 	/*while(1) {
 		loop2();
 	}*/
-
+	
 	//MONITOR.printf("vim_store\n");
 	vim_store(data_global);
 
@@ -6051,13 +6275,9 @@ void setup() {
     
 }
 
-/*void loop() {
-}*/
 void loop() {
 
-	
-
-    //Check XBee 
+    //Check XBee Initialized
     if (last_packet.cmd == COMMAND_ID::ACKNOWLEDGE){
                 
         if (last_packet.status == STATUS_CODE::XBEE_INITIALIZED){
@@ -6076,7 +6296,7 @@ void loop() {
 
         }else if (last_packet.status == STATUS_CODE::XBEE_CELL_CONNECTED){
             
-            //MONITOR.println("XBEE Cell Connected");
+            MONITOR.println("XBEE Cell Connected");
              xbee_cell_connected = true;
             
             send_init_packet();
@@ -6115,28 +6335,34 @@ void loop() {
 	// //MONITOR.printf("Calling AceCON Dev Tick\n");
     acecon_dev_tick();
 
-	// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
-    check_door_condition();
-
-	// //MONITOR.printf("ui_update_ACECON\n");
-    ui_update_acecon_alarms();
-
-	vTaskDelay(5);
-    // //================================================== State Machine Logic =========================================*/
-	
 	Update_Timers();
 
-	Process_System_Alarm_States();
+	vTaskDelay(5);
+
+	if (MainLoop_Timer.OverFlowFlag){
+
+		MONITOR.println("==================LOOP====================");
+
+		// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
+		check_door_condition();
+
+		// //MONITOR.printf("ui_update_ACECON\n");
+		ui_update_acecon();
+		
+		// //================================================== State Machine Logic =========================================*/
+				
+		MainLoop_Timer.StartTimer(MainLoop_Timer.Threshold);
+
+		Process_System_Alarm_States();
 	
-	Process_State_Machine();
+		Process_State_Machine();
+
+		ui_update_icons();
+
+	}
+	
 
 	//MONITOR.printf("Exiting State Machine\n");
-	
-
-	
-	
-	
-
 	
 
 }

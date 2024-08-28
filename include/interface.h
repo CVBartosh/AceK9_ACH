@@ -1,5 +1,5 @@
 // PlatformIO CLI command line for regenerating:
-// ./h2csv include/interface.h /header /output include/init_csv.h
+// .\h2csv include/interface.h /header /output include/init_csv.h
 
 // XBee - ESP32 Interface Protocol
 // Rev 00.00.01
@@ -183,10 +183,11 @@ struct command_packet
     char command[128];                          // command | 128 bytes | string padded by zeros |
 };
 
-struct init_packet
+struct init_packet // DONT USE THIS. REFERENCE ONLY
 {
     constexpr static const COMMAND_ID cmd_ID = COMMAND_ID::INIT;
     // uint32_t crc; (prepended to packet)      // CRC | 4 bytes | 32-bit unsigned word  | Indicates the CRC-32 value for the packet
+    ACE_BOOL dummy;
     // csv files 
 };
 
