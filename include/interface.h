@@ -40,7 +40,9 @@ enum struct COMMAND_ID : int32_t {
     SUBSCRIBE,
     UPDATE,
     FOTA,
-    INIT = 255
+    INIT_DATA = 253,
+    INIT_STATUS = 254,
+    INIT_CONFIG = 255
 };
 enum ACE_BOOL : uint32_t {
     ACE_FALSE = 0,
