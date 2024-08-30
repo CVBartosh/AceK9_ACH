@@ -21,7 +21,9 @@
 #include "test.h"
 #include "vim_controller.hpp"
 #include "SPIFFS.h"
-#include "init_csv.h"
+#include "init_config_packet.h"
+#include "init_data_packet.h"
+#include "init_status_packet.h"
 
 //================================================== Temperature Variables =========================================
 #define TempErrorGeneral    'E'
@@ -2262,11 +2264,47 @@ void Check_IBoxPopped()
 
 }
 
-void send_init_packet() {
-    int len = strlen(INIT_CSV_CSV);
-	MONITOR.println(INIT_CSV_CSV);
+void send_init_config_packet() {
+    int len = strlen(INIT_CONFIG_PACKET_CSV);
+	MONITOR.println(INIT_CONFIG_PACKET_CSV);
     char* sz = (char*)malloc(6+len)+5;
-    strcpy(sz,INIT_CSV_CSV);
+    strcpy(sz,INIT_CONFIG_PACKET_CSV);
+    if(sz==(char*)5) {
+        MONITOR.println("Out of memory. Tough luck.");
+        return;
+    }
+    sz[len]=0;
+    uint32_t crc = crc32(0,(uint8_t*)sz,len);
+    uint8_t* p = (uint8_t*)(sz-5);
+    *p=255;
+    memcpy(p+1,&crc,4);
+    sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
+    free(p);
+}
+
+void send_init_data_packet() {
+    int len = strlen(INIT_DATA_PACKET_CSV);
+	MONITOR.println(INIT_DATA_PACKET_CSV);
+    char* sz = (char*)malloc(6+len)+5;
+    strcpy(sz,INIT_DATA_PACKET_CSV);
+    if(sz==(char*)5) {
+        MONITOR.println("Out of memory. Tough luck.");
+        return;
+    }
+    sz[len]=0;
+    uint32_t crc = crc32(0,(uint8_t*)sz,len);
+    uint8_t* p = (uint8_t*)(sz-5);
+    *p=255;
+    memcpy(p+1,&crc,4);
+    sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
+    free(p);
+}
+
+void send_init_status_packet() {
+    int len = strlen(INIT_STATUS_PACKET_CSV);
+	MONITOR.println(INIT_STATUS_PACKET_CSV);
+    char* sz = (char*)malloc(6+len)+5;
+    strcpy(sz,INIT_STATUS_PACKET_CSV);
     if(sz==(char*)5) {
         MONITOR.println("Out of memory. Tough luck.");
         return;
@@ -2908,9 +2946,15 @@ void monitor_dev_tick(HardwareSerial& s) {
             save_settings();
         } else if (cmd=="report settings"){
             print_settings();
-        } else if (cmd=="fota loop begin"){
+        } else if (cmd=="init data packet"){
+            send_init_data_packet();
+        } else if (cmd=="init config packet"){
+            send_init_config_packet();
+        }else if (cmd=="init status packet"){
+            send_init_status_packet();
+        }else if (cmd=="fota loop begin"){
             on_monitor_fota_loop_begin(str.c_str());
-        } else if (cmd=="alarm none"){
+        }else if (cmd=="alarm none"){
             on_monitor_alarm_none(str.c_str());
         } else if (cmd=="alarm prealarm"){
             on_monitor_alarm_prealarm(str.c_str());
@@ -6299,7 +6343,7 @@ void loop() {
             MONITOR.println("XBEE Cell Connected");
              xbee_cell_connected = true;
             
-            send_init_packet();
+            //send_init_packet();
             String blank;
             // on_monitor_connect(blank.c_str());
             // on_monitor_subscribe_command(blank.c_str());

@@ -187,7 +187,7 @@ struct command_packet
 
 struct init_packet // DONT USE THIS. REFERENCE ONLY
 {
-    constexpr static const COMMAND_ID cmd_ID = COMMAND_ID::INIT;
+    constexpr static const COMMAND_ID cmd_ID = COMMAND_ID::INIT_CONFIG;
     // uint32_t crc; (prepended to packet)      // CRC | 4 bytes | 32-bit unsigned word  | Indicates the CRC-32 value for the packet
     ACE_BOOL dummy;
     // csv files 

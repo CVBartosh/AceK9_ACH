@@ -1,0 +1,18 @@
+"topicName", "char", 16
+"qos", "uint32_t", 4
+"retainFlag", "ACE_BOOL", 4
+"timeStampUTC", "char", 32
+"powerOn", "ACE_BOOL", 4
+"ignitionOn", "ACE_BOOL", 4
+"eventCode", "uint32_t", 4
+"cellStrength", "uint32_t", 4
+"alarmOn", "ACE_BOOL", 4
+"leftTemp", "uint32_t", 4
+"rightTemp", "uint32_t", 4
+"stallSensorPresent", "ACE_BOOL", 4
+"stallCount", "uint32_t", 4
+"batteryVoltage", "uint32_t", 4
+"doorPopUTC", "char", 32
+"version", "uint32_t", 4
+"newstuff", "ACE_BOOL", 4
+

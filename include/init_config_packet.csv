@@ -1,0 +1,18 @@
+"topicName", "char", 16
+"qos", "uint32_t", 4
+"retainFlag", "ACE_BOOL", 4
+"serverDomain", "char", 128
+"firmwareVersion", "char", 16
+"firmwareChecksum", "char", 32
+"firmwareURL", "char", 128
+"heartbeatInterval", "uint32_t", 4
+"temperatureInterval", "uint32_t", 4
+"temperatureDelta", "uint32_t", 4
+"connectTimeout", "uint32_t", 4
+"registrationFailureLimit", "uint32_t", 4
+"hotAlarmtemperature", "uint32_t", 4
+"coldAlarmTemperature", "uint32_t", 4
+"keepAliveInterval", "uint32_t", 4
+"LoggingLevel", "uint32_t", 4
+"assignmentStatus", "uint32_t", 4
+

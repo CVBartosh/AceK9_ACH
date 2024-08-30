@@ -1,0 +1,14 @@
+"topicName", "char", 16
+"qos", "uint32_t", 4
+"retainFlag", "ACE_BOOL", 4
+"unitID", "char", 32
+"unitname", "char", 16
+"unitFirmwareVersion", "char", 16
+"ctrlHeadSerialNumber", "char", 32
+"modemModel", "char", 16
+"modemFirmwareVersion", "char", 32
+"carrierCode", "char", 8
+"mobileEquipmentID", "char", 16
+"integratedCircuitCardID", "char", 32
+"doorPopCount", "uint32_t", 4
+
