@@ -2276,7 +2276,7 @@ void send_init_config_packet() {
     sz[len]=0;
     uint32_t crc = crc32(0,(uint8_t*)sz,len);
     uint8_t* p = (uint8_t*)(sz-5);
-    *p=255;
+    *p=COMMAND_ID::INIT_CONFIG;
     memcpy(p+1,&crc,4);
     sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
     free(p);
@@ -2294,7 +2294,7 @@ void send_init_data_packet() {
     sz[len]=0;
     uint32_t crc = crc32(0,(uint8_t*)sz,len);
     uint8_t* p = (uint8_t*)(sz-5);
-    *p=255;
+    *p=COMMAND_ID::INIT_DATA;
     memcpy(p+1,&crc,4);
     sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
     free(p);
@@ -2312,7 +2312,7 @@ void send_init_status_packet() {
     sz[len]=0;
     uint32_t crc = crc32(0,(uint8_t*)sz,len);
     uint8_t* p = (uint8_t*)(sz-5);
-    *p=255;
+    *p=COMMAND_ID::INIT_STATUS;
     memcpy(p+1,&crc,4);
     sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
     free(p);
