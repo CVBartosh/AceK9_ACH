@@ -2276,7 +2276,7 @@ void send_init_config_packet() {
     sz[len]=0;
     uint32_t crc = crc32(0,(uint8_t*)sz,len);
     uint8_t* p = (uint8_t*)(sz-5);
-    *p=COMMAND_ID::INIT_CONFIG;
+    *p=255;
     memcpy(p+1,&crc,4);
     sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
     free(p);
@@ -2294,7 +2294,7 @@ void send_init_data_packet() {
     sz[len]=0;
     uint32_t crc = crc32(0,(uint8_t*)sz,len);
     uint8_t* p = (uint8_t*)(sz-5);
-    *p=COMMAND_ID::INIT_DATA;
+    *p=255;
     memcpy(p+1,&crc,4);
     sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
     free(p);
@@ -2303,19 +2303,51 @@ void send_init_data_packet() {
 void send_init_status_packet() {
     int len = strlen(INIT_STATUS_PACKET_CSV);
 	MONITOR.println(INIT_STATUS_PACKET_CSV);
+
     char* sz = (char*)malloc(6+len)+5;
     strcpy(sz,INIT_STATUS_PACKET_CSV);
     if(sz==(char*)5) {
         MONITOR.println("Out of memory. Tough luck.");
         return;
     }
+	strcpy(sz,INIT_STATUS_PACKET_CSV);
+
     sz[len]=0;
     uint32_t crc = crc32(0,(uint8_t*)sz,len);
     uint8_t* p = (uint8_t*)(sz-5);
-    *p=COMMAND_ID::INIT_STATUS;
+    *p=255;
     memcpy(p+1,&crc,4);
     sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
     free(p);
+
+	// int len = strlen(INIT_STATUS_PACKET_CSV);
+    // MONITOR.println(INIT_STATUS_PACKET_CSV);
+
+    // // Allocate memory for the packet, including space for header and CRC.
+    // char* sz = (char*)malloc(6 + len); // Allocate enough space for header (1 byte), CRC (4 bytes), and the data
+    // if (sz == nullptr) {
+    //     MONITOR.println("Out of memory. Tough luck.");
+    //     return;
+    // }
+
+    // // Copy the data into the allocated memory with a 5-byte offset for header and CRC.
+    // strcpy(sz + 1, INIT_STATUS_PACKET_CSV); // Shift data by 1 byte for header
+    // sz[len + 1] = 0; // Null-terminate the data
+
+    // // Calculate CRC32 over the data part only (excluding the header)
+    // uint32_t crc = crc32(0, (uint8_t*)(sz + 1), len);
+
+    // // Set the header (first byte) and copy the CRC32
+    // uint8_t* p = (uint8_t*)sz;
+    // *p = (uint8_t)COMMAND_ID::INIT_STATUS; // Use the enum value for the header
+    // memcpy(p + 1 + len, &crc, 4); // Copy CRC32 at the end of the data
+
+    // // Send the packet
+    // sendUserDataRelayAPIFrame(&my_xbee, (char*)p, len + 5);
+
+    // // Free the allocated memory
+    // free(sz);
+
 }
 
 //================================================== Callback Funcitons =========================================*/
