@@ -1,6 +1,7 @@
 #define XBEE Serial1
 #define ACECONSerial Serial2
 #define MONITOR Serial
+#define DUMP_PACKETS
 #include <Arduino.h>
 #include <Wire.h>
 #include <functional>
@@ -1273,18 +1274,18 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 #ifdef DUMP_PACKETS
     // If all characters of message are printable, just print it as a string
     // with printf().  Otherwise use hex_dump() for non-printable messages.
-    int printable = TRUE;
-    for (size_t i = 0; printable && i < payload_length; ++i) {
-        if (!isprint(data->payload[i])) {
-            printable = FALSE;
-        }
-    }
+    // int printable = TRUE;
+    // for (size_t i = 0; printable && i < payload_length; ++i) {
+    //     if (!isprint(data->payload[i])) {
+    //         printable = FALSE;
+    //     }
+    // }
 
-    if (printable) {
+    // if (printable) {
         //MONITOR.printf("%.*s\n\n", payload_length, data->payload);
-    } else {
+    // } else {
         hex_dump(data->payload, payload_length, HEX_DUMP_FLAG_OFFSET);
-    }
+    // }
 #endif
     return 0;
 }
@@ -2294,7 +2295,7 @@ void send_init_data_packet() {
     sz[len]=0;
     uint32_t crc = crc32(0,(uint8_t*)sz,len);
     uint8_t* p = (uint8_t*)(sz-5);
-    *p=255;
+    *p=253;
     memcpy(p+1,&crc,4);
     sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
     free(p);
@@ -2315,7 +2316,7 @@ void send_init_status_packet() {
     sz[len]=0;
     uint32_t crc = crc32(0,(uint8_t*)sz,len);
     uint8_t* p = (uint8_t*)(sz-5);
-    *p=255;
+    *p=254;
     memcpy(p+1,&crc,4);
     sendUserDataRelayAPIFrame(&my_xbee,(char*)p,len+5);
     free(p);
@@ -2414,8 +2415,7 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
     if (length <= 4)
     {
         // format hex string with (2 * number of bytes in value) leading zeros
-        //MONITOR.printf("= 0x%0*" PRIX32 " (%" PRIu32 ")\n", length * 2, response->value,
-                      response->value);
+        //MONITOR.printf("= 0x%0*" PRIX32 " (%" PRIu32 ")\n", length * 2, response->value, response->value);
 
         
 
@@ -6400,7 +6400,7 @@ void loop() {
     monitor_dev_tick(MONITOR);
 
 	// FOTA Code Loop
-	//FOTA_Loop();
+	FOTA_Loop();
 
     xbee_dev_tick(&my_xbee);
 
@@ -6408,34 +6408,34 @@ void loop() {
         on_xbee_error(last_packet.cmd, last_packet.status);
     }
 		
-	// //MONITOR.printf("Calling AceCON Dev Tick\n");
+	//MONITOR.printf("Calling AceCON Dev Tick\n");
     acecon_dev_tick();
 
 	Update_Timers();
 
 	vTaskDelay(5);
 
-	if (MainLoop_Timer.OverFlowFlag){
+	// if (MainLoop_Timer.OverFlowFlag){
 
-		MONITOR.println("==================LOOP====================");
+	// 	MONITOR.println("==================LOOP====================");
 
-		// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
-		check_door_condition();
+	// 	// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
+	// 	check_door_condition();
 
-		// //MONITOR.printf("ui_update_ACECON\n");
-		ui_update_acecon();
+	// 	// //MONITOR.printf("ui_update_ACECON\n");
+	// 	ui_update_acecon();
 		
-		// //================================================== State Machine Logic =========================================*/
+	// 	// //================================================== State Machine Logic =========================================*/
 				
-		MainLoop_Timer.StartTimer(MainLoop_Timer.Threshold);
+	// 	MainLoop_Timer.StartTimer(MainLoop_Timer.Threshold);
 
-		Process_System_Alarm_States();
+	// 	Process_System_Alarm_States();
 	
-		Process_State_Machine();
+	// 	Process_State_Machine();
 
-		ui_update_icons();
+	// 	ui_update_icons();
 
-	}
+	// }
 	
 
 	//MONITOR.printf("Exiting State Machine\n");
