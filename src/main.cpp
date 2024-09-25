@@ -25,6 +25,7 @@
 #include "init_config_packet.h"
 #include "init_data_packet.h"
 #include "init_status_packet.h"
+#include <esp_ota_ops.h>
 
 //================================================== Temperature Variables =========================================
 #define TempErrorGeneral    'E'
@@ -32,7 +33,8 @@
 #define TempErrorSho        '4'
 #define TempSignPos         ' '
 #define TempSignNeg         '-'
-
+//================================================== ESP32 OTA update  =========================================*/
+esp_ota_handle_t ota_handle = 0;
 
 //================================================== Battery Variables =========================================*/
 #define BadBatteryThreshold 9
@@ -6054,7 +6056,7 @@ void FOTA_Loop(){
 			if (PreviousFOTACode != CurrentFOTACode)
 			{
 				MONITOR.println("FOTA Downloading");
-				//esp_ota_begin(esp_ota_get_next_update_partition(NULL), OTA_SIZE_UNKNOWN, &ota_handle);
+				esp_ota_begin(esp_ota_get_next_update_partition(NULL), OTA_SIZE_UNKNOWN, &ota_handle);
 
 				packetnum = 0;
 				PreviousFOTACode = CurrentFOTACode;
@@ -6073,10 +6075,11 @@ void FOTA_Loop(){
 						// Move on to CheckFW
 						MONITOR.println("FOTA Downloading: File Downloaded: true");
 						
-						// if(ESP_OK!=esp_ota_set_boot_partition(esp_ota_get_next_update_partition(NULL))) {
-						// 	// TODO: Put error handling here
-						// 	// if it's an error, the update will be discarded
-						// }
+						if(ESP_OK!=esp_ota_set_boot_partition(esp_ota_get_next_update_partition(NULL))) {
+							
+							MONITOR.println("FOTA Downloading: FOTA Unsuccessful");
+
+						}
 						
 						PreviousFOTACode = CurrentFOTACode;
 						CurrentFOTACode = FOTA_Success;
@@ -6089,11 +6092,11 @@ void FOTA_Loop(){
 						MONITOR.println("FOTA Downloading: Packet Received: " + packetnum);
 						// FOTA LOOPING CODE SECTION
 						
-						// if(ESP_OK!=esp_ota_write(ota_handle,update_data.data,(size_t)update_data.size)) {
-						// 	MONITOR.println("Failed to open file for appending");
-						// 	PreviousFOTACode = CurrentFOTACode;
-						// 	CurrentFOTACode = FOTACode::FOTA_Fail;
-						// }
+						if(ESP_OK!=esp_ota_write(ota_handle,update_data.data,(size_t)update_data.size)) {
+							MONITOR.println("Failed to open file for appending");
+							PreviousFOTACode = CurrentFOTACode;
+							CurrentFOTACode = FOTACode::FOTA_Fail;
+						}
 						
 					}else{
 
@@ -6415,27 +6418,31 @@ void loop() {
 
 	vTaskDelay(5);
 
-	// if (MainLoop_Timer.OverFlowFlag){
+	if (MainLoop_Timer.OverFlowFlag){
 
-	// 	MONITOR.println("==================LOOP====================");
+		MainLoop_Timer.OverFlowFlag = false;
 
-	// 	// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
-	// 	check_door_condition();
+		MainLoop_Timer.StartTimer(MainLoop_Timer.Threshold);
 
-	// 	// //MONITOR.printf("ui_update_ACECON\n");
-	// 	ui_update_acecon();
+		MONITOR.println("================== LOOP A ====================");
+
+		// // //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
+		// check_door_condition();
+
+		// // //MONITOR.printf("ui_update_ACECON\n");
+		// ui_update_acecon();
 		
-	// 	// //================================================== State Machine Logic =========================================*/
-				
-	// 	MainLoop_Timer.StartTimer(MainLoop_Timer.Threshold);
-
-	// 	Process_System_Alarm_States();
+		// // //================================================== State Machine Logic =========================================*/
+		
+		// Process_System_Alarm_States();
 	
-	// 	Process_State_Machine();
+		// Process_State_Machine();
 
-	// 	ui_update_icons();
+		// ui_update_icons();
 
-	// }
+		
+
+	}
 	
 
 	//MONITOR.printf("Exiting State Machine\n");
