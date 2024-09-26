@@ -6073,8 +6073,11 @@ void FOTA_Loop(){
 			else
 			{
 				MONITOR.println("FOTA Success: Validate File: true");
+				MONITOR.println("FOTA Done:: Reseting ESP");
+				resetFunc();  // reset the Arduino via software function
+
 				CurrentFOTACode = FOTACode::FOTA_Done;
-				PreviousFOTACode = CurrentFOTACode;
+				
 			}
 
 			break;
@@ -6084,14 +6087,14 @@ void FOTA_Loop(){
 			// Initial Checks
 			if (PreviousFOTACode != CurrentFOTACode)
 			{
-				MONITOR.println("FOTA Done:: Reseting ESP");
-				resetFunc();  // reset the Arduino via software function
+				
+				PreviousFOTACode = CurrentFOTACode;
 			}
 			else
 			{
 
 				
-				PreviousFOTACode = CurrentFOTACode;
+				
 			}
 
 			break;
