@@ -5920,6 +5920,8 @@ bool Check_FOTA_DOWNLOAD_DONE()
 	return false;
 }
 
+void(* resetFunc) (void) = 0; // create a standard reset function
+
 void FOTA_Loop(){
 
 	if (CurrentFOTACode != FOTA_Done)
@@ -6082,7 +6084,8 @@ void FOTA_Loop(){
 			// Initial Checks
 			if (PreviousFOTACode != CurrentFOTACode)
 			{
-				MONITOR.println("FOTA Done:: Reset ESP");
+				MONITOR.println("FOTA Done:: Reseting ESP");
+				resetFunc();  // reset the Arduino via software function
 			}
 			else
 			{
@@ -6140,6 +6143,7 @@ void FOTA_Loop(){
 
 
 }
+
 
 void setup() {
 	MONITOR.begin(115200);
@@ -6357,7 +6361,7 @@ void loop() {
 
 		MainLoop_Timer.StartTimer(MainLoop_Timer.Threshold);
 
-		MONITOR.println("================== LOOP A ====================");
+		MONITOR.println("================== LOOP B ====================");
 
 		// // //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
 		// check_door_condition();
