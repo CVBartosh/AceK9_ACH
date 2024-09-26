@@ -1252,8 +1252,18 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 		case COMMAND_ID::UPDATE: {
             MONITOR.println("Update Packet Received");
             update_packet pck;
-            memcpy(&pck,payload+5,payload_length-5);
-            
+			//hex_dump(payload,payload_length,0);
+			pck.size = (payload[3]<<8)|payload[4];
+			if(pck.size>1024) {
+				MONITOR.println("Update packet size overflow");
+				pck.size = 1024;
+			}
+			if(pck.size>0) {
+				MONITOR.printf("payload size: %d\n",(int)payload_length);
+				MONITOR.printf("Packet size: %d\n",(int)pck.size);
+            	memcpy(&pck.data,payload+5,pck.size);
+			}
+			
             last_packet.cmd = pck.cmd_ID;
 			last_packet.processed = false;
 
@@ -1286,7 +1296,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
     // if (printable) {
         //MONITOR.printf("%.*s\n\n", payload_length, data->payload);
     // } else {
-        hex_dump(data->payload, payload_length, HEX_DUMP_FLAG_OFFSET);
+        //hex_dump(data->payload, payload_length, HEX_DUMP_FLAG_OFFSET);
     // }
 #endif
     return 0;
@@ -5936,62 +5946,15 @@ void FOTA_Loop(){
 			if (PreviousFOTACode != CurrentFOTACode)
 			{
 				MONITOR.println("FOTA Begin");
-				PreviousFOTACode = CurrentFOTACode;
-			}
-			else
-			{
-
-				// Move on to CheckFW
-				
-				
-				PreviousFOTACode = CurrentFOTACode;
-				CurrentFOTACode = FOTA_CheckFW;
-			}
-
-			break;
-
-		case FOTA_CheckFW:
-
-			// Initial Checks
-			if (PreviousFOTACode != CurrentFOTACode)
-			{
-				MONITOR.println("FOTA CheckFW");
-
-				String str = "";
-              	on_monitor_check_fota(str.c_str());
 
 				PreviousFOTACode = CurrentFOTACode;
 			}
 			else
 			{
-				if (last_packet.processed == true){
+				MONITOR.println("FOTA Begin: Update Partition");
+				esp_ota_begin(esp_ota_get_next_update_partition(NULL), OTA_SIZE_UNKNOWN, &ota_handle);
 
-					// WAIT FOR PACKET
-					// TODO: ADD IN TIMEOUT CODE
-					MONITOR.println("FOTA CheckFW: Waiting for Packet");
-
-				}else{
-					
-					if (Check_ACK())
-					{						
-
-						#ifdef FOTA_MANUAL_CONTROL
-							MONITOR.println("FOTA MANUAL CONTROL ENABLED: 'FOTA Next' to Continue");
-						#else
-							
-							PreviousFOTACode = CurrentFOTACode;
-							CurrentFOTACode = FOTA_Initiate;
-						#endif
-						
-					}else{
-							MONITOR.println("FOTA CheckFW:CheckACK: false");
-							
-							PreviousFOTACode = CurrentFOTACode;
-							CurrentFOTACode = FOTA_Fail;
-							
-					}
-				}
-				
+				CurrentFOTACode = FOTACode::FOTA_Initiate;
 			}
 
 			break;
@@ -6009,37 +5972,12 @@ void FOTA_Loop(){
 			else
 			{
 
-				if (last_packet.processed == true){
+				if (last_packet.cmd == COMMAND_ID::UPDATE){
 
-					// WAIT FOR PACKET
-					// TODO: ADD IN TIMEOUT CODE
-					MONITOR.println("FOTA Initiate: Waiting for Packet");
-
-				}else{
-
-					if (Check_FOTA_FW())
-					{
-						MONITOR.println("FOTA Initiate:Received Update Packet: true");
-
-						#ifdef FOTA_MANUAL_CONTROL
-							MONITOR.println("FOTA MANUAL CONTROL ENABLED: 'FOTA Next' to Continue");
-						#else
-							
-							PreviousFOTACode = CurrentFOTACode;
-							CurrentFOTACode = FOTA_Downloading;
-							
-						#endif
-						
-					}else if (last_packet.cmd == COMMAND_ID::UPDATE){
-						MONITOR.println("FOTA Initiate:Check_FOTA_FW: false");
-
-						
-						PreviousFOTACode = CurrentFOTACode;
-						CurrentFOTACode = FOTA_Fail;
-					}
+					// XBee Sent first Update packet
+					CurrentFOTACode = FOTA_Downloading;
 
 				}
-
 				
 
 
@@ -6055,55 +5993,50 @@ void FOTA_Loop(){
 			// Initial Checks
 			if (PreviousFOTACode != CurrentFOTACode)
 			{
-				MONITOR.println("FOTA Downloading");
-				esp_ota_begin(esp_ota_get_next_update_partition(NULL), OTA_SIZE_UNKNOWN, &ota_handle);
-
+				
 				packetnum = 0;
 				PreviousFOTACode = CurrentFOTACode;
 			}
 			else
 			{
-				if (last_packet.processed == true){
+				
+				if (Check_FOTA_DOWNLOAD_DONE())
+				{
+					// Move on to CheckFW
+					MONITOR.println("FOTA Downloading: File Downloaded: true");
+					
+					if(ESP_OK!=esp_ota_set_boot_partition(esp_ota_get_next_update_partition(NULL))) {
+						
+						MONITOR.println("FOTA Downloading: FOTA Unsuccessful");
 
-					// WAIT FOR PACKET
-					// TODO: ADD IN TIMEOUT CODE
+						PreviousFOTACode = CurrentFOTACode;
+						CurrentFOTACode = FOTA_Fail;
 
+					}
+					
+					PreviousFOTACode = CurrentFOTACode;
+					CurrentFOTACode = FOTA_Success;
+					
+				}
+				else if (last_packet.cmd == COMMAND_ID::UPDATE)
+				{
+					packetnum++;
+					last_packet.cmd = (COMMAND_ID)NULL;
+					MONITOR.printf("FOTA Downloading: Packet Received: #%d\n",packetnum);
+					// FOTA LOOPING CODE SECTION
+					if(ESP_OK!=esp_ota_write(ota_handle,update_data.data,(size_t)update_data.size)) {
+						MONITOR.println("Failed to open file for appending");
+						PreviousFOTACode = CurrentFOTACode;
+						CurrentFOTACode = FOTACode::FOTA_Fail;
+					}
+					
 				}else{
 
-					if (Check_FOTA_DOWNLOAD_DONE())
-					{
-						// Move on to CheckFW
-						MONITOR.println("FOTA Downloading: File Downloaded: true");
-						
-						if(ESP_OK!=esp_ota_set_boot_partition(esp_ota_get_next_update_partition(NULL))) {
-							
-							MONITOR.println("FOTA Downloading: FOTA Unsuccessful");
+					// TODO: ADD IN A TIMEOUT SECTION
 
-						}
-						
-						PreviousFOTACode = CurrentFOTACode;
-						CurrentFOTACode = FOTA_Success;
-						
-					}
-					else if (last_packet.cmd == COMMAND_ID::UPDATE)
-					{
-						packetnum++;
-						last_packet.cmd = (COMMAND_ID)NULL;
-						MONITOR.println("FOTA Downloading: Packet Received: " + packetnum);
-						// FOTA LOOPING CODE SECTION
-						
-						if(ESP_OK!=esp_ota_write(ota_handle,update_data.data,(size_t)update_data.size)) {
-							MONITOR.println("Failed to open file for appending");
-							PreviousFOTACode = CurrentFOTACode;
-							CurrentFOTACode = FOTACode::FOTA_Fail;
-						}
-						
-					}else{
-
-						// TODO: ADD IN A TIMEOUT SECTION
-
-					}
 				}
+
+
 			}
 
 			break;
