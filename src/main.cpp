@@ -6361,7 +6361,7 @@ void loop() {
 
 		MainLoop_Timer.StartTimer(MainLoop_Timer.Threshold);
 
-		MONITOR.println("================== LOOP B ====================");
+		MONITOR.println("================== LOOP A ====================");
 
 		// // //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
 		// check_door_condition();
