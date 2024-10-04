@@ -23,8 +23,9 @@ enum struct STATUS_CODE : int32_t {
     XBEE_INITIALIZED = 1,
     XBEE_CELL_CONNECTED = 2,
     FOTA_CHECK_FW = 3,
-    FOTA_BEGIN = 4,
-    FOTA_DELETE_FILE = 5
+    FOTA_REQUEST_PACKET = 4,
+    FOTA_DELETE_FILE = 5,
+    FOTA_PACKET_COUNT = 6
 };
 
 enum struct COMMAND_ID : int32_t {
@@ -208,6 +209,7 @@ struct fota_packet
 {
     constexpr static const COMMAND_ID cmd_ID = COMMAND_ID::FOTA;
     // uint32_t crc; (prepended to packet)      // CRC | 4 bytes | 32-bit unsigned word  | Indicates the CRC-32 value for the packet
+    uint32_t pktValue; // the number of significant bytes in the data field
     STATUS_CODE fotaStatus;
 };
 
