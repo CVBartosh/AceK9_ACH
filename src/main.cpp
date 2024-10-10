@@ -1,7 +1,4 @@
-#define XBEE Serial1
-#define ACECONSerial Serial2
-#define MONITOR Serial
-#define DUMP_PACKETS
+#include "SerialComms.hpp"
 #include <Arduino.h>
 #include <Wire.h>
 #include <functional>
@@ -84,45 +81,14 @@ acecon aceconvalues_current = {false,false,false,false,false,false};
 acecon aceconvalues_previous = {false,false,false,false,false,false};
 
 
-#define Comm_Error_Timeout	60000// 8000 TODO: Revert this code
+
 int COM_Retry_Attempts = 0;
 #define COM_Retry_Threshold 3
 
-
-
-enum PowerOpt {p_CarONCarOFF,p_CarONManOFF,p_ManONManOFF,p_NoK9Left,p_OFF};
-enum DoorOpt {d_CarONCarOFF,d_CarONManOFF,d_ManONManOFF,d_OFF};
-enum Batt {b_10 = 1,b_105 = 2,b_11 = 3,b_115 =4,b_12 =5};
-
-#define HotTempArraySize 19
-const int HotTempOpt_F[HotTempArraySize] = { 77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95 };
-const int HotTempOpt_C[HotTempArraySize] = { 25,26,26,27,27,28,28,29,29,30,31,31,32,32,33,33,34,34,35 };
-
-#define ColdTempArraySize 14
-const int ColdTempOpt_F[ColdTempArraySize] = { 0,10,14,18,21,25,28,32,38,42,46,50,54,58 };
-const int ColdTempOpt_C[ColdTempArraySize] = { 0,-12,-10,-8,-6,-4,-2,0,2,4,6,8,10,12 };
-
-struct SystemSettings{
-    bool TempAveragingEnabled;
-    bool AutoSnoozeEnabled;
-    bool StallMonitorEnabled;
-    bool AuxInputEnabled;
-	bool ColdAlarmEnabled;
-    bool doorDisabled;
-    int AlarmHotSetIndex;
-    int AlarmColdSetIndex;
-    bool AlarmUnitF;
-    PowerOpt AlarmPower;
-    DoorOpt DoorPower;
-    Batt BatteryVoltage;
-    bool System_Sleep; 			// State Flag to determine if the system was been put to sleep 
-	bool InitialPowerUpFlag; 	// State flag to determine if the system was just powered on, clears when an idle screen is entered
-
-};
-
-SystemSettings systemsettings_current;
-SystemSettings systemsettings_previous;
-SystemSettings systemsettings_default;
+#include "SystemSettings.hpp"
+SystemSettings systemSettingsCurrent;
+SystemSettings systemSettingsPrevious;
+SystemSettings systemSettingsDefault;
 
 #define EngineStallThreshold  1
 
@@ -135,19 +101,14 @@ bool Current_HotnPopFlag_DEFAULT = false;
 #define HotnPopDisabled 50
 
 // System Inputs
-enum DoorPopCondition {dc_Popped = 0,dc_Unpopped = 1};
+#include "SystemInput.hpp"
+
+
 DoorPopCondition CurrentDoorPopCondition = DoorPopCondition::dc_Unpopped;
-
-enum DoorPopTrigger {dt_None,dt_Salute,dt_Remote};
 DoorPopTrigger Current_DoorPopTrigger = DoorPopTrigger::dt_None;
-
-bool UpdateDoorFlag = false;
-
-#define INGEAR	0
-#define PARKED	1
+PowerOnTrigger CurrentPowerOnTrigger;
 
 bool GoToMenuFlag = false;
-
 
 vim_data data_global;
 
@@ -249,51 +210,17 @@ vim_data data_global;
 
 
 //================================================== FOTA Stuff =========================================
+#include "FOTAOps.hpp"
 
-
-//#define FOTA_MANUAL_CONTROL
-
-int packetnum = 0;
-
-enum FOTACode
-{
-	FOTA_CheckFW,
-	FOTA_DeleteFW,
-	FOTA_Initiate,
-	FOTA_Done,
-	FOTA_Downloading = 68,
-	FOTA_Waiting = 87,
-	FOTA_Begin = 80,
-	FOTA_Success = 83,
-	FOTA_Rollback = 82,
-	FOTA_Fail = 70,
-	FOTA_None = 78
-};
-FOTACode CurrentFOTACode = FOTA_None;
-FOTACode PreviousFOTACode = CurrentFOTACode;
-#define FOTA_Packet_Length 1024
-bool FOTA_Allowed = false;
+FOTAOps fotaOps;
 
 //================================================== State Machine Stuff =========================================
 
-enum PowerOnTrigger {NoTrigger,Applied,PowerButtonPress,IgnitionOn};
 
-PowerOnTrigger CurrentPowerOnTrigger;
 
-enum StateID {ID_A0_Off,ID_A1_PowerApplied, ID_A3_IgnitionOn,
-			  ID_B1_MenuHelp,
-              ID_C1_HA_DP,ID_C2_HA_ONLY,ID_C3_DP_ONLY,
-              ID_D1_NOK9LeftBehind,ID_D2_PressOKToConfirm,ID_D6_NoK9LeftBehindPowerDownByDoorOpened,ID_D7_PowerDownByOKPress,ID_D8_PowerDownByIgnitionOFF, ID_D9_PowerDownByHAandDPSetToAlwaysOFF, ID_D10_PowerDownByPowerPress, ID_D11_UpdatingFirmware,
-              ID_E1_VIMCommunicationsError, ID_E3_UNKNOWN,
-              ID_S1_Sleep, 
-              ID_G1_SystemTestConfirm, ID_G2_SystemTest};
+#include "StateMachine.hpp"
 
-struct SystemState{
-    StateID Index;
-    String Name;
-    //PowerOnTrigger PowerTrigger;
-
-};
+StateMachine stateMachine;
 
 SystemState systemstate_current;
 SystemState systemstate_previous;
@@ -323,111 +250,43 @@ SystemState G2_SystemTest_State;
 
 
 //================================================== Timer Stuff =========================================
-
-
-enum TimerID {Timer_A0_Off,Timer_A1_PowerApplied, Timer_A3_IgnitionOn,
-			  Timer_B1_MenuHelp,
-              Timer_C1_HA_DP,Timer_C2_HA_ONLY,Timer_C3_DP_ONLY,
-              Timer_D1_NOK9LeftBehind,Timer_D2_PressOKToConfirm,Timer_D6_NoK9LeftBehindPowerDownByDoorOpened,Timer_D7_PowerDownByOKPress,Timer_D8_PowerDownByIgnitionOFF, Timer_D9_PowerDownByHAandDPSetToAlwaysOFF, Timer_D10_PowerDownByPowerPress, Timer_D11_UpdatingFirmware,
-              Timer_E1_VIMCommunicationsError, Timer_E3_UNKNOWN,
-              Timer_S1_Sleep, 
-              Timer_G1_SystemTestConfirm, Timer_G2_SystemTest,
-			  Timer_Read_IBoxPopped,Timer_Clear_IBoxPopped,Timer_ReadGear,Timer_ClearGear,Timer_SystemAlarm,TimerPreAlarmNotification, Timer_SnoozeAlarm,
-			  Timer_NoK9Blink, Timer_NoK9Beep, Timer_NoK9FirstAlert,Timer_NoK9SecondAlert, Timer_COMReset, Timer_COMError, Timer_InitialPowerUp, Timer_VIMAlarm};
-
-struct Timer{
-    TimerID Index;
-    String Name;
-    unsigned long TimeVal;
-	unsigned long Threshold;
-	bool OverFlowFlag;
-	bool TimerEnable;
-	
-	void SetTimerVal(long timeval){
-		TimeVal = timeval;
-	}
-	void SyncTimerVal(){
-		TimeVal = millis();
-	}
-	void SetThreshold(unsigned long thresholdval){
-		Threshold = thresholdval;
-	}
-	unsigned long ReadTimerVal(){
-		return TimeVal;
-	}
-	bool CheckOverflow(){
-		if (TimerEnable == true) {
-
-			if (millis() - ReadTimerVal() >= Threshold)
-			{
-				OverFlowFlag = true;
-				return true;
-			}
-		
-		}
-		return false;
-	}
-	void StartTimer(unsigned long thresholdval){
-
-		// Set Threshold
-		SetThreshold(thresholdval);
-
-		// Clear OverFlow Flag
-		OverFlowFlag = false;
-
-		// Enable Timer
-		TimerEnable = true;
-
-		// Sync Timer Val
-		SyncTimerVal();
-		}
-	void StopTimer(){
-
-			// Clear OverFlow Flag
-			OverFlowFlag = false;
-
-			// Disable Timer
-			TimerEnable = false;
-		}
-
-};
-
-Timer A0_Off_Timer;
-Timer A1_PowerApplied_Timer;
-Timer A3_IgnitionOn_Timer;
-Timer B1_MenuHelp_Timer;
-Timer C1_HA_DP_Timer;
-Timer C2_HA_Only_Timer;
-Timer C3_DP_Only_Timer;
-Timer D1_NoK9LeftBehind_Timer;
-Timer D2_PressOKToConfirm_Timer;
-Timer D6_NoK9LeftBehindPowerDownByDoorOpened_Timer;
-Timer D7_PowerDownByOKPress_Timer;
-Timer D8_PowerDownByIgnitionOFF_Timer;
-Timer D9_PowerDownByHAandDPSetToAlwaysOFF_Timer;
-Timer D10_PowerDownByPowerPress_Timer;
-Timer D11_UpdatingFirmware_Timer;
-Timer E1_VIMCommunicationsError_Timer;
-Timer E3_Unknown_Timer;
-Timer S1_Sleep_Timer;
-Timer G1_SystemTestConfirm_Timer;
-Timer G2_SystemTest_Timer;
-Timer Read_IBoxPopped_Timer;
-Timer Clear_IBoxPopped_Timer;
-Timer Read_Gear_Timer;
-Timer Clear_Gear_Timer;
-Timer SystemAlarm_Timer;
-Timer PreAlarmNotification_Timer;
-Timer SnoozeAlarm_Timer;
-Timer NoK9Blink_Timer;
-Timer NoK9Beep_Timer;
-Timer NoK9FirstAlert_Timer;
-Timer NoK9SecondAlert_Timer;
-Timer COMReset_Timer;
-Timer COMError_Timer;
-Timer InitialPowerUp_Timer;
-Timer VIMAlarm_Timer;
-Timer MainLoop_Timer;
+#include "CustomTimer.hpp"
+CustomTimer A0_Off_Timer;
+CustomTimer A1_PowerApplied_Timer;
+CustomTimer A3_IgnitionOn_Timer;
+CustomTimer B1_MenuHelp_Timer;
+CustomTimer C1_HA_DP_Timer;
+CustomTimer C2_HA_Only_Timer;
+CustomTimer C3_DP_Only_Timer;
+CustomTimer D1_NoK9LeftBehind_Timer;
+CustomTimer D2_PressOKToConfirm_Timer;
+CustomTimer D6_NoK9LeftBehindPowerDownByDoorOpened_Timer;
+CustomTimer D7_PowerDownByOKPress_Timer;
+CustomTimer D8_PowerDownByIgnitionOFF_Timer;
+CustomTimer D9_PowerDownByHAandDPSetToAlwaysOFF_Timer;
+CustomTimer D10_PowerDownByPowerPress_Timer;
+CustomTimer D11_UpdatingFirmware_Timer;
+CustomTimer E1_VIMCommunicationsError_Timer;
+CustomTimer E3_Unknown_Timer;
+CustomTimer S1_Sleep_Timer;
+CustomTimer G1_SystemTestConfirm_Timer;
+CustomTimer G2_SystemTest_Timer;
+CustomTimer Read_IBoxPopped_Timer;
+CustomTimer Clear_IBoxPopped_Timer;
+CustomTimer Read_Gear_Timer;
+CustomTimer Clear_Gear_Timer;
+CustomTimer SystemAlarm_Timer;
+CustomTimer PreAlarmNotification_Timer;
+CustomTimer SnoozeAlarm_Timer;
+CustomTimer NoK9Blink_Timer;
+CustomTimer NoK9Beep_Timer;
+CustomTimer NoK9FirstAlert_Timer;
+CustomTimer NoK9SecondAlert_Timer;
+CustomTimer COMReset_Timer;
+CustomTimer COMError_Timer;
+CustomTimer InitialPowerUp_Timer;
+CustomTimer VIMAlarm_Timer;
+CustomTimer MainLoop_Timer;
 
 //================================================== Alarm Stuff =========================================
 
@@ -476,683 +335,155 @@ bool System_Test_Alarm_Active = false;
 #define COLOR_BLUE		0x00FFFF
 #define COLOR_GREEN		0x90EE90
 
-void Init_Timers()
-{
-	// Initialize Timers
-	
-	// Read_IBoxPopped_Timer State Initialization
-	Read_IBoxPopped_Timer.Name = "Read_IBoxPopped_Timer";
-	Read_IBoxPopped_Timer.OverFlowFlag = false;
-	Read_IBoxPopped_Timer.Threshold = 60;
-	Read_IBoxPopped_Timer.TimerEnable = true;
+void Init_Timers() {
+    // Initialize Timers
 
-	// Clear_IBoxPopped_Timer State Initialization
-	Clear_IBoxPopped_Timer.Name = "Clear_IBoxPopped_Timer";
-	Clear_IBoxPopped_Timer.OverFlowFlag = false;
-	Clear_IBoxPopped_Timer.Threshold = 6000;
-	Clear_IBoxPopped_Timer.TimerEnable = false;// Enabled later if the system detects a Popped Condition
+	A0_Off_Timer.setThreshold(1500);
+    A1_PowerApplied_Timer.setThreshold(1500);
+    A3_IgnitionOn_Timer.setThreshold(1500);
+    B1_MenuHelp_Timer.setThreshold(3000);
+    D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.setThreshold(4000);
+    D7_PowerDownByOKPress_Timer.setThreshold(4000);
+    D8_PowerDownByIgnitionOFF_Timer.setThreshold(4000);
+    D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.setThreshold(4000);
+    D10_PowerDownByPowerPress_Timer.setThreshold(4000);
 
-	// Read_Gear_Timer State Initialization
-	Read_Gear_Timer.Name = "Read_Gear_Timer";
-	Read_Gear_Timer.OverFlowFlag = false;
-	Read_Gear_Timer.Threshold = 60;
-	Read_Gear_Timer.TimerEnable = true;
+    // Read_IBoxPopped_Timer State Initialization
+    Read_IBoxPopped_Timer.setName("Read_IBoxPopped_Timer");
+    Read_IBoxPopped_Timer.setOverflowFlag(false);
+    Read_IBoxPopped_Timer.setThreshold(60);
+    Read_IBoxPopped_Timer.setTimerEnable(true);
 
-	// Clear_Gear_Timer State Initialization
-	Clear_Gear_Timer.Name = "Clear_Gear_Timer";
-	Clear_Gear_Timer.OverFlowFlag = false;
-	Clear_Gear_Timer.Threshold = 3500; // 3.5s 3500ms
-	Clear_Gear_Timer.TimerEnable = false; // Enabled later if the system detects an In Gear Condition
+    // Clear_IBoxPopped_Timer State Initialization
+    Clear_IBoxPopped_Timer.setName("Clear_IBoxPopped_Timer");
+    Clear_IBoxPopped_Timer.setOverflowFlag(false);
+    Clear_IBoxPopped_Timer.setThreshold(6000);
+    Clear_IBoxPopped_Timer.setTimerEnable(false); // Enabled later if the system detects a Popped Condition
 
-	// SystemAlarm_Timer State Initialization
-	SystemAlarm_Timer.Name = "SystemAlarm_Timer";
-	SystemAlarm_Timer.OverFlowFlag = false;
-	SystemAlarm_Timer.Threshold = SystemAlarmTimerVal;
-	SystemAlarm_Timer.TimerEnable = false; // Enabled later if the System count overflows
+    // Read_Gear_Timer State Initialization
+    Read_Gear_Timer.setName("Read_Gear_Timer");
+    Read_Gear_Timer.setOverflowFlag(false);
+    Read_Gear_Timer.setThreshold(60);
+    Read_Gear_Timer.setTimerEnable(true);
 
-	// PreAlarmNotification_Timer State Initialization
-	PreAlarmNotification_Timer.Name = "PreAlarmNotification_Timer";
-	PreAlarmNotification_Timer.OverFlowFlag = false;
-	PreAlarmNotification_Timer.Threshold = 1000;
-	PreAlarmNotification_Timer.TimerEnable = false;
+    // Clear_Gear_Timer State Initialization
+    Clear_Gear_Timer.setName("Clear_Gear_Timer");
+    Clear_Gear_Timer.setOverflowFlag(false);
+    Clear_Gear_Timer.setThreshold(3500); // 3.5s
+    Clear_Gear_Timer.setTimerEnable(false); // Enabled later if the system detects an In Gear Condition
 
-	// SnoozeAlarm_Timer State Initialization
-	SnoozeAlarm_Timer.Name = "SnoozeAlarm_Timer";
-	SnoozeAlarm_Timer.OverFlowFlag = false;
-	SnoozeAlarm_Timer.Threshold = SnoozeAlarmTimerVal;
-	SnoozeAlarm_Timer.TimerEnable = false;
+    // SystemAlarm_Timer State Initialization
+    SystemAlarm_Timer.setName("SystemAlarm_Timer");
+    SystemAlarm_Timer.setOverflowFlag(false);
+    SystemAlarm_Timer.setThreshold(SystemAlarmTimerVal);
+    SystemAlarm_Timer.setTimerEnable(false); // Enabled later if the System count overflows
 
-	// NoK9BlinkTimer State Initialization
-	NoK9Blink_Timer.Name = "NoK9Blink_Timer";
-	NoK9Blink_Timer.OverFlowFlag = false;
-	NoK9Blink_Timer.Threshold = 1000;
-	NoK9Blink_Timer.TimerEnable = false; // Enabled later if the system goes to No K9 Screen
+    // PreAlarmNotification_Timer State Initialization
+    PreAlarmNotification_Timer.setName("PreAlarmNotification_Timer");
+    PreAlarmNotification_Timer.setOverflowFlag(false);
+    PreAlarmNotification_Timer.setThreshold(1000);
+    PreAlarmNotification_Timer.setTimerEnable(false);
 
-	// NoK9BeepTimer State Initialization
-	NoK9Beep_Timer.Name = "NoK9Beep_Timer";
-	NoK9Beep_Timer.OverFlowFlag = false;
-	NoK9Beep_Timer.Threshold = 8000;
-	NoK9Beep_Timer.TimerEnable = false; // Enabled later if the system goes to No K9 Screen
+    // SnoozeAlarm_Timer State Initialization
+    SnoozeAlarm_Timer.setName("SnoozeAlarm_Timer");
+    SnoozeAlarm_Timer.setOverflowFlag(false);
+    SnoozeAlarm_Timer.setThreshold(SnoozeAlarmTimerVal);
+    SnoozeAlarm_Timer.setTimerEnable(false);
 
-	// NoK9AlertTimer State Initialization
-	NoK9FirstAlert_Timer.Name = "NoK9FirstAlert_Timer";
-	NoK9FirstAlert_Timer.OverFlowFlag = false;
-	NoK9FirstAlert_Timer.Threshold = 10000; //180000; // 3 mins == 180s == 180000ms // TODO: REVERT THIS CONSTANT VALUE
-	NoK9FirstAlert_Timer.TimerEnable = false; // Enabled later if the system goes to No K9 Screen
+    // NoK9Blink_Timer State Initialization
+    NoK9Blink_Timer.setName("NoK9Blink_Timer");
+    NoK9Blink_Timer.setOverflowFlag(false);
+    NoK9Blink_Timer.setThreshold(1000);
+    NoK9Blink_Timer.setTimerEnable(false); // Enabled later if the system goes to No K9 Screen
 
-	// NoK9AlertTimer State Initialization
-	NoK9SecondAlert_Timer.Name = "NoK9SecondAlert_Timer";
-	NoK9SecondAlert_Timer.OverFlowFlag = false;
-	NoK9SecondAlert_Timer.Threshold = 20000; //360000; // 6 mins == 360s == 360000ms // TODO: REVERT THIS CONSTANT VALUE
-	NoK9SecondAlert_Timer.TimerEnable = false; // Enabled later if the system goes to No K9 Screen
+    // NoK9Beep_Timer State Initialization
+    NoK9Beep_Timer.setName("NoK9Beep_Timer");
+    NoK9Beep_Timer.setOverflowFlag(false);
+    NoK9Beep_Timer.setThreshold(8000);
+    NoK9Beep_Timer.setTimerEnable(false); // Enabled later if the system goes to No K9 Screen
 
-	// COM Error Timer Initialization
-	COMError_Timer.Name = "COMError_Timer";
-	COMError_Timer.OverFlowFlag = false;
-	COMError_Timer.Threshold = 2000;
-	COMError_Timer.TimerEnable = false;
+    // NoK9FirstAlert_Timer State Initialization
+    NoK9FirstAlert_Timer.setName("NoK9FirstAlert_Timer");
+    NoK9FirstAlert_Timer.setOverflowFlag(false);
+    NoK9FirstAlert_Timer.setThreshold(10000); // 10s (Adjust to 180000ms for production)
+    NoK9FirstAlert_Timer.setTimerEnable(false); // Enabled later if the system goes to No K9 Screen
 
-	// COM Reset Timer Initialization
-	COMReset_Timer.Name = "COMReset_Timer";
-	COMReset_Timer.OverFlowFlag = false;
-	COMReset_Timer.Threshold = 2000;
-	COMReset_Timer.TimerEnable = false;
+    // NoK9SecondAlert_Timer State Initialization
+    NoK9SecondAlert_Timer.setName("NoK9SecondAlert_Timer");
+    NoK9SecondAlert_Timer.setOverflowFlag(false);
+    NoK9SecondAlert_Timer.setThreshold(20000); // 20s (Adjust to 360000ms for production)
+    NoK9SecondAlert_Timer.setTimerEnable(false); // Enabled later if the system goes to No K9 Screen
 
-	// InitialPowerUp_Timer Initialization
-	InitialPowerUp_Timer.Name = "InitialPowerUp_Timer";
-	InitialPowerUp_Timer.OverFlowFlag = false;
-	InitialPowerUp_Timer.Threshold = 1000;
-	InitialPowerUp_Timer.TimerEnable = false;
-	
-	// VIMAlarm_Timer
-	VIMAlarm_Timer.Name = "VIMAlarm_Timer";
-	VIMAlarm_Timer.OverFlowFlag = false;
-	VIMAlarm_Timer.Threshold = 300000; // 5min = 300 s = 300,000 ms
-	VIMAlarm_Timer.TimerEnable = false;
-	
-	// MainLoop_Timer
-	MainLoop_Timer.Name = "MainLoop_Timer";
-	MainLoop_Timer.OverFlowFlag = false;
-	MainLoop_Timer.Threshold = 1500; // 1s = 1,000 ms
-	MainLoop_Timer.TimerEnable = true;
+    // COMError_Timer Initialization
+    COMError_Timer.setName("COMError_Timer");
+    COMError_Timer.setOverflowFlag(false);
+    COMError_Timer.setThreshold(6000);
+    COMError_Timer.setTimerEnable(false);
 
+    // COMReset_Timer Initialization
+    COMReset_Timer.setName("COMReset_Timer");
+    COMReset_Timer.setOverflowFlag(false);
+    COMReset_Timer.setThreshold(2000);
+    COMReset_Timer.setTimerEnable(false);
+
+    // InitialPowerUp_Timer Initialization
+    InitialPowerUp_Timer.setName("InitialPowerUp_Timer");
+    InitialPowerUp_Timer.setOverflowFlag(false);
+    InitialPowerUp_Timer.setThreshold(1000);
+    InitialPowerUp_Timer.setTimerEnable(false);
+
+    // VIMAlarm_Timer Initialization
+    VIMAlarm_Timer.setName("VIMAlarm_Timer");
+    VIMAlarm_Timer.setOverflowFlag(false);
+    VIMAlarm_Timer.setThreshold(300000); // 5min
+    VIMAlarm_Timer.setTimerEnable(false);
+
+    // MainLoop_Timer Initialization
+    MainLoop_Timer.setName("MainLoop_Timer");
+    MainLoop_Timer.setOverflowFlag(false);
+    MainLoop_Timer.setThreshold(1500); // 1.5s
+    MainLoop_Timer.setTimerEnable(true);
 }
 
-void Update_Timers()
-{
-	// System State Timers
-	A0_Off_Timer.CheckOverflow();
-	A1_PowerApplied_Timer.CheckOverflow();
-	A3_IgnitionOn_Timer.CheckOverflow();
-	B1_MenuHelp_Timer.CheckOverflow();
-	C1_HA_DP_Timer.CheckOverflow();
-	C2_HA_Only_Timer.CheckOverflow();
-	C3_DP_Only_Timer.CheckOverflow();
-	D1_NoK9LeftBehind_Timer.CheckOverflow();
-	D2_PressOKToConfirm_Timer.CheckOverflow();
-	D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.CheckOverflow();
-	D7_PowerDownByOKPress_Timer.CheckOverflow();
-	D8_PowerDownByIgnitionOFF_Timer.CheckOverflow();
-	D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.CheckOverflow();
-	D10_PowerDownByPowerPress_Timer.CheckOverflow();
-	D11_UpdatingFirmware_Timer.CheckOverflow();
-	E1_VIMCommunicationsError_Timer.CheckOverflow();
-	S1_Sleep_Timer.CheckOverflow();
-	G1_SystemTestConfirm_Timer.CheckOverflow();
-	G2_SystemTest_Timer.CheckOverflow();
+void Update_Timers() {
+    // System State Timers
+    A0_Off_Timer.checkOverflow();
+    A1_PowerApplied_Timer.checkOverflow();
+    A3_IgnitionOn_Timer.checkOverflow();
+    B1_MenuHelp_Timer.checkOverflow();
+    C1_HA_DP_Timer.checkOverflow();
+    C2_HA_Only_Timer.checkOverflow();
+    C3_DP_Only_Timer.checkOverflow();
+    D1_NoK9LeftBehind_Timer.checkOverflow();
+    D2_PressOKToConfirm_Timer.checkOverflow();
+    D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.checkOverflow();
+    D7_PowerDownByOKPress_Timer.checkOverflow();
+    D8_PowerDownByIgnitionOFF_Timer.checkOverflow();
+    D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.checkOverflow();
+    D10_PowerDownByPowerPress_Timer.checkOverflow();
+    D11_UpdatingFirmware_Timer.checkOverflow();
+    E1_VIMCommunicationsError_Timer.checkOverflow();
+    S1_Sleep_Timer.checkOverflow();
+    G1_SystemTestConfirm_Timer.checkOverflow();
+    G2_SystemTest_Timer.checkOverflow();
 
-	// General Timers
-	Read_IBoxPopped_Timer.CheckOverflow();
-	Clear_IBoxPopped_Timer.CheckOverflow();
-	Read_Gear_Timer.CheckOverflow();
-	Clear_Gear_Timer.CheckOverflow();
-	SystemAlarm_Timer.CheckOverflow();
-	PreAlarmNotification_Timer.CheckOverflow();
-	SnoozeAlarm_Timer.CheckOverflow();
-	NoK9Blink_Timer.CheckOverflow();
-	NoK9Beep_Timer.CheckOverflow();
-	NoK9FirstAlert_Timer.CheckOverflow();
-	NoK9SecondAlert_Timer.CheckOverflow();
-	COMError_Timer.CheckOverflow();
-	COMReset_Timer.CheckOverflow();
-	InitialPowerUp_Timer.CheckOverflow();
-	VIMAlarm_Timer.CheckOverflow();
-	MainLoop_Timer.CheckOverflow();
-}
-
-void Init_SystemStates()
-{
-
-	// Initialize System States
-	A0_Off_State.Name = "A0 Off State";
-    A0_Off_State.Index = StateID::ID_A0_Off;
-	// A0_Off_State.OverFlowFlag = false;
-	// A0_Off_State.SyncTimerVal();
-	// A0_Off_State.Threshold = 20;
-	// A0_Off_State.TimerEnable = false;
-
-	A1_PowerApplied_State.Name = "A1 Power Applied State";
-	A1_PowerApplied_State.Index = StateID::ID_A1_PowerApplied;
-	// A1_PowerApplied_State.OverFlowFlag = false;
-	// A1_PowerApplied_State.SyncTimerVal();
-	// A1_PowerApplied_State.Threshold = 0;
-	// A1_PowerApplied_State.TimerEnable = false;
-
-	A3_IgnitionOn_State.Name = "A3 Ignition On State";
-	A3_IgnitionOn_State.Index = StateID::ID_A3_IgnitionOn;
-	// A3_IgnitionOn_State.OverFlowFlag = false;
-	// A3_IgnitionOn_State.SyncTimerVal();
-	// A3_IgnitionOn_State.Threshold = 0;
-	// A3_IgnitionOn_State.TimerEnable = false;
-
-	B1_MenuHelp_State.Name = "B1 Menu Help State";
-	B1_MenuHelp_State.Index = StateID::ID_B1_MenuHelp;
-	// B1_MenuHelp_State.OverFlowFlag = false;
-	// B1_MenuHelp_State.SyncTimerVal();
-	// B1_MenuHelp_State.Threshold = 0;
-	// B1_MenuHelp_State.TimerEnable = false;
-
-	C1_HA_DP_State.Name = "C1 HA_DP State";
-	C1_HA_DP_State.Index = StateID::ID_C1_HA_DP;
-	// C1_HA_DP_State.OverFlowFlag = false;
-	// C1_HA_DP_State.SyncTimerVal();
-	// C1_HA_DP_State.Threshold = 0;
-	// C1_HA_DP_State.TimerEnable = false;
-
-	C2_HA_ONLY_State.Name = "C2 HA Only State";
-	C2_HA_ONLY_State.Index = StateID::ID_C2_HA_ONLY;
-	// C2_HAOnly_State.OverFlowFlag = false;
-	// C2_HAOnly_State.SyncTimerVal();
-	// C2_HAOnly_State.Threshold = 0;
-	// C2_HAOnly_State.TimerEnable = false;
-
-	C3_DP_ONLY_State.Name = "C3 DP Only State";
-	C3_DP_ONLY_State.Index = StateID::ID_C3_DP_ONLY;
-	// C3_DP_ONLY_State.OverFlowFlag = false;
-	// C3_DP_ONLY_State.SyncTimerVal();
-	// C3_DP_ONLY_State.Threshold = 0;
-	// C3_DP_ONLY_State.TimerEnable = false;
-
-	D1_NOK9LeftBehind_State.Name = "D1 No K9 Left Behind State";
-	D1_NOK9LeftBehind_State.Index = StateID::ID_D1_NOK9LeftBehind;
-	// D1_NoK9LeftBehind_State.OverFlowFlag = false;
-	// D1_NoK9LeftBehind_State.SyncTimerVal();
-	// D1_NoK9LeftBehind_State.Threshold = 0;
-	// D1_NoK9LeftBehind_State.TimerEnable = false;
-
-	D2_PressOKToConfirm_State.Name = "D2 Press OK To Confirm State";
-	D2_PressOKToConfirm_State.Index = StateID::ID_D2_PressOKToConfirm;
-	// D2_PressOKToConfirm_State.OverFlowFlag = false;
-	// D2_PressOKToConfirm_State.SyncTimerVal();
-	// D2_PressOKToConfirm_State.Threshold = 0;
-	// D2_PressOKToConfirm_State.TimerEnable = false;
-
-	D6_NoK9LeftBehindPowerDownByDoorOpened_State.Name = "No K9 Left Behind Power Down By Door Opened";
-	D6_NoK9LeftBehindPowerDownByDoorOpened_State.Index = StateID::ID_D6_NoK9LeftBehindPowerDownByDoorOpened;
-	// D6_NoK9LeftBehindPowerDownByDoorOpened_State.OverFlowFlag = false;
-	// D6_NoK9LeftBehindPowerDownByDoorOpened_State.SyncTimerVal();
-	// D6_NoK9LeftBehindPowerDownByDoorOpened_State.Threshold = 0;
-	// D6_NoK9LeftBehindPowerDownByDoorOpened_State.TimerEnable = false;
-
-	D7_PowerDownByOKPress_State.Name = "D7 Power Down By OK Press State";
-	D7_PowerDownByOKPress_State.Index = StateID::ID_D7_PowerDownByOKPress;
-	// D7_PowerDownByOKPress_State.OverFlowFlag = false;
-	// D7_PowerDownByOKPress_State.SyncTimerVal();
-	// D7_PowerDownByOKPress_State.Threshold = 0;
-	// D7_PowerDownByOKPress_State.TimerEnable = false;
-
-	D8_PowerDownByIgnitionOFF_State.Name = "D8 Power Down By Ignition OFF State";
-	D8_PowerDownByIgnitionOFF_State.Index = StateID::ID_D8_PowerDownByIgnitionOFF;
-	// D8_PowerDownByIgnitionOFF_State.OverFlowFlag = false;
-	// D8_PowerDownByIgnitionOFF_State.SyncTimerVal();
-	// D8_PowerDownByIgnitionOFF_State.Threshold = 0;
-	// D8_PowerDownByIgnitionOFF_State.TimerEnable = false;
-
-	D9_PowerDownByHAandDPSetToAlwaysOFF_State.Name = "D9 Power Down By HA and DP Set To Always OFF State";
-	D9_PowerDownByHAandDPSetToAlwaysOFF_State.Index = StateID::ID_D9_PowerDownByHAandDPSetToAlwaysOFF;
-	// D9_PowerDownByHAandDPSetToAlwaysOFF_State.OverFlowFlag = false;
-	// D9_PowerDownByHAandDPSetToAlwaysOFF_State.SyncTimerVal();
-	// D9_PowerDownByHAandDPSetToAlwaysOFF_State.Threshold = 0;
-	// D9_PowerDownByHAandDPSetToAlwaysOFF_State.TimerEnable = false;
-
-	D10_PowerDownByPowerPress_State.Name = "D10 Power Down By Power Press State";
-	D10_PowerDownByPowerPress_State.Index = StateID::ID_D10_PowerDownByPowerPress;
-	// D10_PowerDownByPowerPress_State.OverFlowFlag = false;
-	// D10_PowerDownByPowerPress_State.SyncTimerVal();
-	// D10_PowerDownByPowerPress_State.Threshold = 0;
-	// D10_PowerDownByPowerPress_State.TimerEnable = false;
-
-	D11_UpdatingFirmware_State.Name = "D11 Updating Firmware State";
-	D11_UpdatingFirmware_State.Index = StateID::ID_D11_UpdatingFirmware;
-	// D11_UpdatingFirmware_State.OverFlowFlag = false;
-	// D11_UpdatingFirmware_State.SyncTimerVal();
-	// D11_UpdatingFirmware_State.Threshold = 300000;// 5min = 300s = 300000ms
-	// D11_UpdatingFirmware_State.TimerEnable = false;
-
-	E1_VIMCommunicationsError_State.Name = "E1 VIM Communications Error State";
-	E1_VIMCommunicationsError_State.Index = StateID::ID_E1_VIMCommunicationsError;
-	// E1_VIMCommunicationsError_State.OverFlowFlag = false;
-	// E1_VIMCommunicationsError_State.SyncTimerVal();
-	// E1_VIMCommunicationsError_State.Threshold = 0;
-	// E1_VIMCommunicationsError_State.TimerEnable = false;
-
-	E3_Unknown_State.Name = "E3 Unknown State";
-	E3_Unknown_State.Index = StateID::ID_E3_UNKNOWN;
-	// E3_Unhandled_State.OverFlowFlag = false;
-	// E3_Unhandled_State.SyncTimerVal();
-	// E3_Unhandled_State.Threshold = 0;
-	// E3_Unhandled_State.TimerEnable = false;
-
-	S1_Sleep_State.Name = "S1 Sleep State";
-	S1_Sleep_State.Index = StateID::ID_S1_Sleep;
-	// S1_Sleep_State.OverFlowFlag = false;
-	// S1_Sleep_State.SyncTimerVal();
-	// S1_Sleep_State.Threshold = 0;
-	// S1_Sleep_State.TimerEnable = false;
-
-	G1_SystemTestConfirm_State.Name = "G1 System Test Confirm State";
-	G1_SystemTestConfirm_State.Index = StateID::ID_G1_SystemTestConfirm;
-	// G1_SystemTestConfirm_State.OverFlowFlag = false;
-	// G1_SystemTestConfirm_State.SyncTimerVal();
-	// G1_SystemTestConfirm_State.Threshold = 4000;
-	// G1_SystemTestConfirm_State.TimerEnable = false;
-
-	G2_SystemTest_State.Name = "G2 System Test State";
-	G2_SystemTest_State.Index = StateID::ID_G2_SystemTest;
-	// G2_SystemTest_State.OverFlowFlag = false;
-	// G2_SystemTest_State.SyncTimerVal();
-	// G2_SystemTest_State.Threshold = 5000;
-	// G2_SystemTest_State.TimerEnable = false;
-
-	// ReSet Current and Prev States
-	systemstate_previous = E3_Unknown_State;
-	systemstate_current = A0_Off_State;
-
-}
-
-void Set_Next_State(SystemState nextstate)
-{
-
-	// FOTA functionality needs to check if the system is trying to power down. If it is and FOTA operations are pending, the systems needs
-	// to temporarily go to the FOTA state before continuing on to the previously requested power down state.
-	if ((CurrentFOTACode == FOTACode::FOTA_Downloading || CurrentFOTACode == FOTACode::FOTA_Waiting) && 
-		(nextstate.Index == D6_NoK9LeftBehindPowerDownByDoorOpened_State.Index ||
-			nextstate.Index == D7_PowerDownByOKPress_State.Index ||
-			nextstate.Index == D8_PowerDownByIgnitionOFF_State.Index ||
-			nextstate.Index == D9_PowerDownByHAandDPSetToAlwaysOFF_State.Index ||
-			nextstate.Index == D10_PowerDownByPowerPress_State.Index)
-		
-		)
-	{
-
-		StoredNextState = nextstate;
-		
-        MONITOR.println("Next System State: " + D11_UpdatingFirmware_State.Name);
-		MONITOR.println("Stored Next System State: " + StoredNextState.Name);
-
-        
-		systemstate_previous = systemstate_current;
-		systemstate_current = D11_UpdatingFirmware_State;
-
-
-	}
-	else
-	{
-		MONITOR.println("Next System State: " + nextstate.Name);
-		systemstate_previous = systemstate_current;
-		systemstate_current = nextstate;
-	}
-
-}
-
-SystemState Determine_Next_State()
-{
-	MONITOR.println("Determine Next State");
-	MONITOR.printf("IngitionOn:  %s\r\n",data_global.ignitionOn_current?"TRUE":"FALSE");
-	switch (systemsettings_current.DoorPower)
-	{
-	case DoorOpt::d_CarONCarOFF:
-		MONITOR.println("Door Power: CarOnCarOFF");
-		break;
-	case DoorOpt::d_CarONManOFF :
-		MONITOR.println("Door Power: CarOnManOFF");
-		break;
-	case DoorOpt::d_ManONManOFF:
-		MONITOR.println("Door Power: ManOnManOFF");
-		break;
-	case DoorOpt::d_OFF:
-		MONITOR.println("Door Power: OFF");
-		break;
-	
-	default:
-		MONITOR.println("Door Power: Unknown");
-		break;
-	}			
-	switch (systemsettings_current.AlarmPower)
-	{
-	case PowerOpt::p_CarONCarOFF:
-		MONITOR.println("Alarm Power: CarOnCarOFF");
-		break;
-	case PowerOpt::p_CarONManOFF:
-		MONITOR.println("Alarm Power: CarOnManOFF");
-		break;
-	case PowerOpt::p_ManONManOFF:
-		MONITOR.println("Alarm Power: ManOnManOFF");
-		break;
-	case PowerOpt::p_OFF:
-		MONITOR.println("Alarm Power: OFF");
-		break;
-	case PowerOpt::p_NoK9Left:
-		MONITOR.println("Alarm Power: No K9");
-		break;
-	
-	default:
-		MONITOR.println("Alarm Power: Unknown");
-		break;
-	}		
-
-
-
-	switch (CurrentPowerOnTrigger)
-	{
-	case PowerOnTrigger::NoTrigger:
-		MONITOR.println("PowerOnTrigger: No Trigger");
-		break;
-	case PowerOnTrigger::IgnitionOn:
-		MONITOR.println("PowerOnTrigger: Ignition On");
-		break;
-	case PowerOnTrigger::Applied:
-		MONITOR.println("PowerOnTrigger: Applied");
-		break;
-	case PowerOnTrigger::PowerButtonPress:
-		MONITOR.println("PowerOnTrigger: Power Button Press");
-		break;
-	
-	default:
-		MONITOR.println("PowerOnTrigger: Unknown");
-		break;
-	}			
-	
-
-	if (CurrentPowerOnTrigger == PowerOnTrigger::Applied ||
-		CurrentPowerOnTrigger == PowerOnTrigger::PowerButtonPress)
-	{
-		MONITOR.println("Power Trigger: Applied");
-		// Ignition OFF
-		if (data_global.ignitionOn_current == false)
-		{
-			MONITOR.println("ignitionOn: false");
-			// Door Popper Settings
-			if (systemsettings_current.DoorPower == DoorOpt::d_OFF)
-			{
-				// Alarm Settings
-				if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
-				{
-					return (D9_PowerDownByHAandDPSetToAlwaysOFF_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
-				{
-					return (D8_PowerDownByIgnitionOFF_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
-				{
-					return (D1_NOK9LeftBehind_State);
-				}
-				// else if (systemsettings_current.AlarmPower == PowerOpt::p_AutoStart)
-				// {
-				// 	return (StateID::C2_HA_ONLY);
-				// }
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF || systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
-				{
-					return (C2_HA_ONLY_State);
-				}
-			}
-			else if (systemsettings_current.DoorPower == DoorOpt::d_CarONCarOFF)
-			{
-				// Alarm Settings
-				if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
-				{
-					return (D8_PowerDownByIgnitionOFF_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
-				{
-					return (D8_PowerDownByIgnitionOFF_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
-				{
-					return (D1_NOK9LeftBehind_State);
-				}
-				// else if (systemsettings_current.AlarmPower == PowerOpt::p_AutoStart)
-				// {
-				// 	return (StateID::C2_HA_ONLY);
-				// }
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF || systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
-				{
-					return (C2_HA_ONLY_State);
-				}
-			}
-			else if (systemsettings_current.DoorPower == DoorOpt::d_CarONManOFF)
-			{
-				// Alarm Settings
-				if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
-				{
-					return (C3_DP_ONLY_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
-				{
-					return (C3_DP_ONLY_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
-				{
-					return (D1_NOK9LeftBehind_State);
-				}
-				// else if (systemsettings_current.AlarmPower == PowerOpt::p_AutoStart)
-				// {
-				// 	return (StateID::C1_HA_DP);
-				// }
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF || systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
-				{
-					return (C1_HA_DP_State);
-				}
-			}
-			else if (systemsettings_current.DoorPower == DoorOpt::d_ManONManOFF)
-			{
-				// Alarm Settings
-				if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
-				{
-					return (C3_DP_ONLY_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
-				{
-					return (C3_DP_ONLY_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
-				{
-					return (C3_DP_ONLY_State);
-				}
-				// else if (systemsettings_current.AlarmPower == PowerOpt::p_AutoStart)
-				// {
-				// 	return (StateID::C1_HA_DP);
-				// }
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF || systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
-				{
-					return (C1_HA_DP_State);
-				}
-			}
-
-		}
-
-		// Ignition ON
-		else if (data_global.ignitionOn_current == true)
-		{
-			// Door Popper Settings
-			if (systemsettings_current.DoorPower == DoorOpt::d_OFF)
-			{
-				// Alarm Settings
-				if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
-				{
-					return (D9_PowerDownByHAandDPSetToAlwaysOFF_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
-				{
-					return (C2_HA_ONLY_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
-				{
-					return (C2_HA_ONLY_State);
-				}
-				// else if (systemsettings_current.AlarmPower == PowerOpt::p_AutoStart)
-				// {
-				// 	return (StateID::C2_HA_ONLY);
-				// }
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF || systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
-				{
-					return (C2_HA_ONLY_State);
-				}
-			}
-			else if (systemsettings_current.DoorPower == DoorOpt::d_CarONCarOFF)
-			{
-				// Alarm Settings
-				if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
-				{
-					return (C3_DP_ONLY_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
-				{
-					return (C1_HA_DP_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
-				{
-					return (C1_HA_DP_State);
-				}
-				// else if (systemsettings_current.AlarmPower == PowerOpt::p_AutoStart)
-				// {
-				// 	return (StateID::C1_HA_DP);
-				// }
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF || systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
-				{
-					return (C1_HA_DP_State);
-
-				}
-			}
-			else if (systemsettings_current.DoorPower == DoorOpt::d_CarONManOFF || systemsettings_current.DoorPower == DoorOpt::d_ManONManOFF)
-			{
-				// Alarm Settings
-				if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
-				{
-					return (C3_DP_ONLY_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
-				{
-					return (C1_HA_DP_State);
-				}
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
-				{
-					return (C1_HA_DP_State);
-				}
-				// else if (systemsettings_current.AlarmPower == PowerOpt::p_AutoStart)
-				// {
-				// 	return (StateID::C1_HA_DP);
-				// }
-				else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF || systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
-				{
-					return (C1_HA_DP_State);
-
-				}
-			}
-
-		}
-
-	}
-	else if (CurrentPowerOnTrigger == PowerOnTrigger::IgnitionOn)
-	{
-		MONITOR.println("Power Trigger: Ignition On");
-		// Door Popper Settings
-		if (systemsettings_current.DoorPower == DoorOpt::d_OFF)
-		{
-			// Alarm Settings
-			if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
-			{
-				return (D8_PowerDownByIgnitionOFF_State);
-			}
-			else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF || systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF)
-			{
-				return (C2_HA_ONLY_State);
-			}
-			else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
-			{
-				return (C2_HA_ONLY_State);
-			}
-			// else if (systemsettings_current.AlarmPower == PowerOpt::p_AutoStart)
-			// {
-			// 	return (StateID::C2_HA_ONLY);
-			// }
-			else if (systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
-			{
-				return (E3_Unknown_State);
-			}
-
-		}
-		else if (systemsettings_current.DoorPower == DoorOpt::d_CarONCarOFF || systemsettings_current.DoorPower == DoorOpt::d_CarONManOFF)
-		{
-			// Alarm Settings
-			if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
-			{
-				return (C3_DP_ONLY_State);
-			}
-			else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF || systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF)
-			{
-				return (C1_HA_DP_State);
-			}
-			else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
-			{
-				return (C1_HA_DP_State);
-			}
-			// else if (systemsettings_current.AlarmPower == PowerOpt::p_AutoStart)
-			// {
-			// 	return (StateID::C1_HA_DP);
-			// }
-			else if (systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
-			{
-				return (C3_DP_ONLY_State);
-			}
-
-		}
-		else if (systemsettings_current.DoorPower == DoorOpt::d_ManONManOFF)
-		{
-			// Alarm Settings
-			if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
-			{
-				return (E3_Unknown_State);
-			}
-			else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF || systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF)
-			{
-				return (C2_HA_ONLY_State);
-			}
-			else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
-			{
-				return (C2_HA_ONLY_State);
-			}
-			// else if (systemsettings_current.AlarmPower == PowerOpt::p_AutoStart)
-			// {
-			// 	return (StateID::C2_HA_ONLY);
-			// }
-			else if (systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
-			{
-				return (E3_Unknown_State);
-			}
-
-		}
-	}
-
-	MONITOR.println("WTF?");
-
-return (E3_Unknown_State);
-}
-
-void Set_Determined_State()
-{	
-	Set_Next_State(Determine_Next_State());
+    // General Timers
+    Read_IBoxPopped_Timer.checkOverflow();
+    Clear_IBoxPopped_Timer.checkOverflow();
+    Read_Gear_Timer.checkOverflow();
+    Clear_Gear_Timer.checkOverflow();
+    SystemAlarm_Timer.checkOverflow();
+    PreAlarmNotification_Timer.checkOverflow();
+    SnoozeAlarm_Timer.checkOverflow();
+    NoK9Blink_Timer.checkOverflow();
+    NoK9Beep_Timer.checkOverflow();
+    NoK9FirstAlert_Timer.checkOverflow();
+    NoK9SecondAlert_Timer.checkOverflow();
+    COMError_Timer.checkOverflow();
+    COMReset_Timer.checkOverflow();
+    InitialPowerUp_Timer.checkOverflow();
+    VIMAlarm_Timer.checkOverflow();
+    MainLoop_Timer.checkOverflow();
 }
 
 File settings_file;
@@ -1163,7 +494,7 @@ void save_settings() {
         SPIFFS.remove("/settings");
     }
     settings_file = SPIFFS.open("/settings","wb",true);
-    if(sizeof(systemsettings_current)>settings_file.write((uint8_t*)&systemsettings_current,sizeof(systemsettings_current))) {
+    if(sizeof(systemSettingsCurrent)>settings_file.write((uint8_t*)&systemSettingsCurrent,sizeof(systemSettingsCurrent))) {
         //MONITOR.println("Error writing settings file. Too few bytes written");
     }
     settings_file.close();
@@ -1172,23 +503,23 @@ void save_settings() {
 
 void print_settings(){
     //MONITOR.println("Printing System Settings");
-    //MONITOR.println("AlarmPower: " + (String)(systemsettings_current.AlarmPower));
+    //MONITOR.println("AlarmPower: " + (String)(systemSettingsCurrent.getAlarmPower()));
 }
 
 bool load_settings() {
     //MONITOR.println("Loading Settings File");
-    memcpy(&systemsettings_current,&systemsettings_default,sizeof(systemsettings_current));
+    memcpy(&systemSettingsCurrent,&systemSettingsDefault,sizeof(systemSettingsCurrent));
     if(SPIFFS.exists("/settings"))
 	{
 		settings_file = SPIFFS.open("/settings","rb",false);
 	}
     if(!settings_file) {
-		memcpy(&systemsettings_current,&systemsettings_default,sizeof(systemsettings_current));
+		memcpy(&systemSettingsCurrent,&systemSettingsDefault,sizeof(systemSettingsCurrent));
         //MONITOR.println("Settings File Not Found");
         return false;
     }
-    if(sizeof(systemsettings_current)>settings_file.read((uint8_t*)&systemsettings_current,sizeof(systemsettings_current))) {
-        memcpy(&systemsettings_current,&systemsettings_default,sizeof(systemsettings_current));
+    if(sizeof(systemSettingsCurrent)>settings_file.read((uint8_t*)&systemSettingsCurrent,sizeof(systemSettingsCurrent))) {
+        memcpy(&systemSettingsCurrent,&systemSettingsDefault,sizeof(systemSettingsCurrent));
         settings_file.close();
         //MONITOR.println("Settings File Invalid (read length)");
         return false;
@@ -1661,12 +992,10 @@ void handlePreAlarmState(){
 		DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
 
 		// Enable Pre Alarm Notification Timer
-		PreAlarmNotification_Timer.StartTimer(PreAlarmNotification_Timer.Threshold);
-		MONITOR.printf("PreAlarmNotification_Timer started with threshold %lu\n", PreAlarmNotification_Timer.Threshold);
+		PreAlarmNotification_Timer.startTimer();
 
 		// Enable Timer
-		SystemAlarm_Timer.StartTimer(SystemAlarm_Timer.Threshold);
-		MONITOR.printf("SystemAlarm_Timer started with threshold %lu\n", SystemAlarm_Timer.Threshold);
+		SystemAlarm_Timer.startTimer();
 
 		// Set Prev State
 		Sync_Alarm_States();
@@ -1695,10 +1024,10 @@ void handlePreAlarmState(){
 		data_global.updateIcons  = true;
 
 		// Disable Pre Alarm Notification Timer
-		PreAlarmNotification_Timer.StopTimer();
+		PreAlarmNotification_Timer.stopTimer();
 
 		// Clear the OverFlow Flag and Disable the Timer
-		SystemAlarm_Timer.StopTimer();
+		SystemAlarm_Timer.stopTimer();
 		DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
 
 		// Set Alarm to None
@@ -1706,7 +1035,7 @@ void handlePreAlarmState(){
 		
 	}
 	// Check if the alarm needs to graduate to full
-	else if (SystemAlarm_Timer.OverFlowFlag == true)
+	else if (SystemAlarm_Timer.checkOverflow())
 	{
 		MONITOR.println("PreAlarm Timer overflow detected, transitioning to FullAlarm");
 
@@ -1725,18 +1054,18 @@ void handlePreAlarmState(){
 		data_global.updateIcons = true;
 
 		// Disable Pre Alarm Notification Timer
-		PreAlarmNotification_Timer.StopTimer();
+		PreAlarmNotification_Timer.stopTimer();
 		DisplayPreAlarmCounter = DisplayPreAlarmCounter_Default;
 
 		Set_Alarm_State(AlarmState::a_FullAlarm);
 		MONITOR.println("Transitioning to FullAlarm from PreAlarm");
 	}
 	// Check if the Countdown Timer needs to be updated
-	else if (PreAlarmNotification_Timer.OverFlowFlag == true)
+	else if (PreAlarmNotification_Timer.checkOverflow())
 	{
 		MONITOR.println("PreAlarmNotification_Timer overflow detected");
-		PreAlarmNotification_Timer.OverFlowFlag = false;
-		PreAlarmNotification_Timer.SyncTimerVal();
+		PreAlarmNotification_Timer.setOverflowFlag(false);
+		PreAlarmNotification_Timer.syncTimerVal();
 
 		// Set Pre Alarm Sound Pulse
 		//Set_SoundPulse(PulseProfile::pp_DoubleBeep);
@@ -1826,8 +1155,7 @@ void handleSnoozeState(){
 		DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
 
 		// Enable Pre Alarm Notification Timer
-		SnoozeAlarm_Timer.StartTimer(SnoozeAlarm_Timer.Threshold);
-		MONITOR.printf("SnoozeAlarm_Timer started with threshold %lu\n", SnoozeAlarm_Timer.Threshold);
+		SnoozeAlarm_Timer.startTimer();
 
 		// Set Prev State
 		Sync_Alarm_States();
@@ -1859,7 +1187,7 @@ void handleSnoozeState(){
 	}
 
 	// Check if the Snooze Timer has Overflowed
-	else if (SnoozeAlarm_Timer.OverFlowFlag == true)
+	else if (SnoozeAlarm_Timer.checkOverflow())
 	{
 		MONITOR.println("SnoozeAlarm_Timer overflow detected, transitioning to PreAlarm");
 
@@ -1878,7 +1206,7 @@ void handleSnoozeState(){
 		data_global.updateIcons = true;
 
 		// Clear the OverFlow Flag and Disable the Timer
-		SnoozeAlarm_Timer.StopTimer();
+		SnoozeAlarm_Timer.stopTimer();
 		DisplaySnoozeAlarmCounter = DisplaySnoozeAlarmCounter_Default;
 
 		// Set Alarm to Full
@@ -1997,7 +1325,7 @@ void handleFullAlarmState(){
 		data_global.updateIcons = true;
 
 		// Disable Timer and Clear OverFlow Flag
-		SystemAlarm_Timer.StopTimer();
+		SystemAlarm_Timer.stopTimer();
 		MONITOR.println("SystemAlarm_Timer stopped");
 
 		// Set Alarm to None
@@ -2051,9 +1379,9 @@ void handleNoneState(){
 		CurrentFullAlarmCounter = 0;
 
 		// Disable Timers
-		PreAlarmNotification_Timer.StopTimer();
-		SystemAlarm_Timer.StopTimer();
-		SnoozeAlarm_Timer.StopTimer();
+		PreAlarmNotification_Timer.stopTimer();
+		SystemAlarm_Timer.stopTimer();
+		SnoozeAlarm_Timer.stopTimer();
 		MONITOR.println("All alarm-related timers stopped");
 
 		// Set Prev State
@@ -2083,16 +1411,16 @@ void handleNoneState(){
 		// Set the General Update Flag
 		data_global.updateIcons = true;
 
-		if (systemsettings_current.AutoSnoozeEnabled == true) { 
+		if (systemSettingsCurrent.isAutoSnoozeEnabled()) { 
 			MONITOR.println("AutoSnooze is enabled"); 
 			}
-		if (systemsettings_current.InitialPowerUpFlag == true) {
+		if (systemSettingsCurrent.isInitialPowerUp()) {
 			 MONITOR.println("InitialPowerUpFlag is set"); 
 			 }
 
 		// AUTOSNOOZE FUNCTIONALITY HERE
 		// If the system has just woken up then go to snooze
-		if (systemsettings_current.InitialPowerUpFlag == true && systemsettings_current.AutoSnoozeEnabled == true)
+		if (systemSettingsCurrent.isInitialPowerUp() && systemSettingsCurrent.isAutoSnoozeEnabled())
 		{
 			// Go to Snooze Alarm State
 			Set_Alarm_State(AlarmState::a_Snooze);
@@ -2178,9 +1506,9 @@ void Reset_System_Alarm_State()
 	CurrentFullAlarmCounter = 0;
 
 	// Disable Timers
-	PreAlarmNotification_Timer.StopTimer();
-	SystemAlarm_Timer.StopTimer();
-	SnoozeAlarm_Timer.StopTimer();
+	PreAlarmNotification_Timer.stopTimer();
+	SystemAlarm_Timer.stopTimer();
+	SnoozeAlarm_Timer.stopTimer();
 
 	// Clear any update flags
 	data_global.batt_error_current = false;
@@ -2197,15 +1525,15 @@ void Reset_System_Alarm_State()
 
 void Check_IBoxPopped()
 {
-	// if (Read_IBoxPopped_Timer.OverFlowFlag == true)
+	// if (Read_IBoxPopped_Timer.checkOverflow())
 	// {
 
-	// 	Read_IBoxPopped_Timer.OverFlowFlag = false;
+	// 	Read_IBoxPopped_Timer.overflowFlag = false;
 	// 	Read_IBoxPopped_Timer.SyncTimerVal();
 
 
 	// 	// Make Sure System will allow the door popper to work
-	// 	if (Current_INGEAR == PARKED && Clear_IBoxPopped_Timer.TimerEnable == false && Current_HotnPopFlag == true)
+	// 	if (Current_INGEAR == PARKED && Clear_IBoxPopped_Timer.timerEnable == false && Current_HotnPopFlag == true)
 	// 	{
 	// 		// Determine Door Trigger. Only process a new trigger  after the None State has been set. This ensure the system fully process
 	// 		// the previous trigger event
@@ -2228,7 +1556,7 @@ void Check_IBoxPopped()
 	// 			if (Current_DoorPopTrigger == DoorPopTrigger::dt_Salute)
 	// 			{
 	// 				digitalWrite(ACECON_POP_OUT, HIGH);
-	// 				SaluteHold_Timer.StartTimer(SaluteHold_Timer.Threshold);
+	// 				SaluteHold_Timer.startTimer(SaluteHold_Timer.threshold);
 	// 			}
 
 
@@ -2236,27 +1564,27 @@ void Check_IBoxPopped()
 	// 			UpdateDoorFlag = true;
 
 	// 			// Start Timer
-	// 			Clear_IBoxPopped_Timer.StartTimer(Clear_IBoxPopped_Timer.Threshold);
+	// 			Clear_IBoxPopped_Timer.startTimer(Clear_IBoxPopped_Timer.threshold);
 
 	// 		}
 
 
 	// 	}
 
-	// 	if (SaluteHold_Timer.OverFlowFlag == true)
+	// 	if (SaluteHold_Timer.checkOverflow())
 	// 	{
-	// 		SaluteHold_Timer.OverFlowFlag = false;
-	// 		SaluteHold_Timer.StopTimer();
+	// 		SaluteHold_Timer.overflowFlag = false;
+	// 		SaluteHold_Timer.stopTimer();
 	// 		digitalWrite(ACECON_POP_OUT, LOW);
 
 	// 	}
 
 	// 	// Check if its time to clear the popped condition
-	// 	if (Clear_IBoxPopped_Timer.OverFlowFlag == true)
+	// 	if (Clear_IBoxPopped_Timer.checkOverflow())
 	// 	{
-	// 		Clear_IBoxPopped_Timer.OverFlowFlag = false;
+	// 		Clear_IBoxPopped_Timer.overflowFlag = false;
 
-	// 		Clear_IBoxPopped_Timer.StopTimer();
+	// 		Clear_IBoxPopped_Timer.stopTimer();
 
 
 	// 		Current_DoorPopTrigger = DoorPopTrigger::dt_None;
@@ -2894,7 +2222,7 @@ void on_monitor_begin_fota(const char* str) {
 
 void on_monitor_fota_loop_begin(const char* str) {
     
-    CurrentFOTACode = FOTA_Begin;    
+    fotaOps.setFOTACode(FOTACode::FOTA_Begin);    
 }
 
 void on_monitor_delete_file(const char* str) {
@@ -2983,10 +2311,10 @@ void monitor_dev_tick(HardwareSerial& s) {
         } else if (cmd=="subscribe command"){
             on_monitor_subscribe_command(str.c_str());
         } else if (cmd=="save default settings"){
-            systemsettings_current = systemsettings_default;    
+            systemSettingsCurrent = systemSettingsDefault;    
             save_settings();            
         } else if (cmd=="save custom settings"){
-            //systemsettings_current.AlarmPower = PowerOpt::p_ManONManOFF;
+            //systemSettingsCurrent.setAlarmPower(PowerOpt::p_ManONManOFF);
             save_settings();
         } else if (cmd=="report settings"){
             print_settings();
@@ -3027,7 +2355,7 @@ void ui_update_acecon() {
         if(data_global.leftTemp_previous!=data_global.leftTemp_current || data_global.units_changed) {
             ////MONITOR.println("UI: Updating Left Temp");
             static char szLeftTemp[6];
-            if (systemsettings_current.AlarmUnitF){
+            if (systemSettingsCurrent.isAlarmUnitF()){
                 sprintf(szLeftTemp,"%3.1f",data_global.leftTemp_current);
             }else{
                 sprintf(szLeftTemp,"%3.1f",ConvertFtoC(data_global.leftTemp_current));
@@ -3057,7 +2385,7 @@ void ui_update_acecon() {
         if (data_global.rightTemp_previous!=data_global.rightTemp_current || data_global.units_changed) {
             ////MONITOR.println("UI: Updating Right Temp");
             static char szRightTemp[6];
-            if (systemsettings_current.AlarmUnitF){
+            if (systemSettingsCurrent.isAlarmUnitF()){
                 sprintf(szRightTemp,"%3.1f",data_global.rightTemp_current);
             }else{
                 sprintf(szRightTemp,"%3.1fleftTempState",ConvertFtoC(data_global.rightTemp_current));
@@ -3084,11 +2412,11 @@ void ui_update_acecon() {
             lv_label_set_text(ui_LabelRightTemp,szRightTemp);
         }
 
-        if (systemsettings_current.TempAveragingEnabled){
+        if (systemSettingsCurrent.isTempAveragingEnabled()){
             ////MONITOR.println("UI: Updating Avg Temp");
             static char szAvgTemp[6];
 
-            if (systemsettings_current.AlarmUnitF){
+            if (systemSettingsCurrent.isAlarmUnitF()){
                 sprintf(szAvgTemp,"%3.1f",data_global.avgTemp);
             }else{
                 sprintf(szAvgTemp,"%3.1f",ConvertFtoC(data_global.avgTemp));
@@ -3123,11 +2451,11 @@ void ui_update_acecon() {
 		// ============= TEMPERATURE EVALUATION =============
 
 		// Check Temperature Values are within range
-		if (systemsettings_current.TempAveragingEnabled == true)
+		if (systemSettingsCurrent.isTempAveragingEnabled())
 		{
 			MONITOR.println("Temp Averaging Enabled");
 			// Sensor 1
-			if (data_global.leftTemp_current >= (HotTempOpt_F[systemsettings_current.AlarmHotSetIndex]) + SingleTempOverrideAmount)
+			if (data_global.leftTemp_current >= (HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()]) + SingleTempOverrideAmount)
 			{
 				MONITOR.println("Left Temp: Over");
 
@@ -3135,12 +2463,12 @@ void ui_update_acecon() {
 				FullAlarmText = "HOT  ALARM";
 				data_global.leftTempState = TempState::tst_OverPlus;
 			}
-			else if (data_global.leftTemp_current >= ((HotTempOpt_F[systemsettings_current.AlarmHotSetIndex]) + SingleTempOverrideAmount) - TempWarningOffset)
+			else if (data_global.leftTemp_current >= ((HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()]) + SingleTempOverrideAmount) - TempWarningOffset)
 			{
 				MONITOR.println("Left Temp: Warning");
 				data_global.leftTempState = TempState::tst_Warning;
 			}
-			else if (systemsettings_current.ColdAlarmEnabled == true && data_global.leftTemp_current <= ColdTempOpt_F[systemsettings_current.AlarmColdSetIndex])
+			else if (systemSettingsCurrent.isColdAlarmEnabled() && data_global.leftTemp_current <= ColdTempOpt_F[systemSettingsCurrent.getAlarmColdSetIndex()])
 			{
 				MONITOR.println("Left Temp: Under");
 
@@ -3157,19 +2485,19 @@ void ui_update_acecon() {
 			}
 
 			// Sensor 2
-			if (data_global.rightTemp_current >= (HotTempOpt_F[systemsettings_current.AlarmHotSetIndex]) + SingleTempOverrideAmount)
+			if (data_global.rightTemp_current >= (HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()]) + SingleTempOverrideAmount)
 			{
 				MONITOR.println("Right Temp: Over");
 				PreAlertText = "HOT ALERT";
 				FullAlarmText = "HOT  ALARM";
 				data_global.rightTempState = TempState::tst_OverPlus;
 			}
-			else if (data_global.rightTemp_current >= ((HotTempOpt_F[systemsettings_current.AlarmHotSetIndex]) + SingleTempOverrideAmount) - TempWarningOffset)
+			else if (data_global.rightTemp_current >= ((HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()]) + SingleTempOverrideAmount) - TempWarningOffset)
 			{
 				MONITOR.println("Right Temp: Warning");
 				data_global.rightTempState = TempState::tst_Warning;
 			}
-			else if (systemsettings_current.ColdAlarmEnabled == true && data_global.rightTemp_current <= ColdTempOpt_F[systemsettings_current.AlarmColdSetIndex])
+			else if (systemSettingsCurrent.isColdAlarmEnabled() && data_global.rightTemp_current <= ColdTempOpt_F[systemSettingsCurrent.getAlarmColdSetIndex()])
 			{
 				MONITOR.println("Right Temp: Under");
 				PreAlertText = "COLD ALERT";
@@ -3185,7 +2513,7 @@ void ui_update_acecon() {
 			}
 
 			// Check if the Average Value is out of range
-			if (data_global.avgTemp >= HotTempOpt_F[systemsettings_current.AlarmHotSetIndex])
+			if (data_global.avgTemp >= HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()])
 			{
 				MONITOR.println("Average Temp: Over");
 
@@ -3194,12 +2522,12 @@ void ui_update_acecon() {
 				
 				data_global.avgTempState = TempState::tst_Over;
 			}
-			else if (data_global.avgTemp >= (HotTempOpt_F[systemsettings_current.AlarmHotSetIndex] - TempWarningOffset))
+			else if (data_global.avgTemp >= (HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()] - TempWarningOffset))
 			{
 				MONITOR.println("Average Temp: Warning");
 				data_global.avgTempState = TempState::tst_Warning;
 			}
-			else if (systemsettings_current.ColdAlarmEnabled == true && data_global.avgTemp <= ColdTempOpt_F[systemsettings_current.AlarmColdSetIndex])
+			else if (systemSettingsCurrent.isColdAlarmEnabled() && data_global.avgTemp <= ColdTempOpt_F[systemSettingsCurrent.getAlarmColdSetIndex()])
 			{
 				PreAlertText = "COLD ALERT";
 				FullAlarmText = "COLD  ALARM";
@@ -3246,17 +2574,17 @@ void ui_update_acecon() {
 		else
 		{
 			// Sensor 1
-			if (data_global.leftTemp_current >= (HotTempOpt_F[systemsettings_current.AlarmHotSetIndex]))
+			if (data_global.leftTemp_current >= (HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()]))
 			{
 				PreAlertText = "HOT ALERT";
 				FullAlarmText = "HOT  ALARM";
 				data_global.leftTempState = TempState::tst_Over;
 			}
-			else if (data_global.leftTemp_current >= (HotTempOpt_F[systemsettings_current.AlarmHotSetIndex] - TempWarningOffset))
+			else if (data_global.leftTemp_current >= (HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()] - TempWarningOffset))
 			{
 				data_global.leftTempState = TempState::tst_Warning;
 			}
-			else if (systemsettings_current.ColdAlarmEnabled == true && data_global.leftTemp_current <= ColdTempOpt_F[systemsettings_current.AlarmColdSetIndex])
+			else if (systemSettingsCurrent.isColdAlarmEnabled() && data_global.leftTemp_current <= ColdTempOpt_F[systemSettingsCurrent.getAlarmColdSetIndex()])
 			{
 				PreAlertText = "COLD ALERT";
 				FullAlarmText = "COLD  ALARM";
@@ -3268,17 +2596,17 @@ void ui_update_acecon() {
 			}
 
 			// Sensor 2
-			if (data_global.rightTemp_current >= (HotTempOpt_F[systemsettings_current.AlarmHotSetIndex]))
+			if (data_global.rightTemp_current >= (HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()]))
 			{
 				PreAlertText = "HOT ALERT";
 				FullAlarmText = "HOT  ALARM";
 				data_global.rightTempState = TempState::tst_Over;
 			}
-			else if (data_global.rightTemp_current >= (HotTempOpt_F[systemsettings_current.AlarmHotSetIndex] - TempWarningOffset))
+			else if (data_global.rightTemp_current >= (HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()] - TempWarningOffset))
 			{
 				data_global.rightTempState = TempState::tst_Warning;
 			}
-			else if (systemsettings_current.ColdAlarmEnabled == true && data_global.rightTemp_current <= ColdTempOpt_F[systemsettings_current.AlarmColdSetIndex])
+			else if (systemSettingsCurrent.isColdAlarmEnabled() && data_global.rightTemp_current <= ColdTempOpt_F[systemSettingsCurrent.getAlarmColdSetIndex()])
 			{
 				PreAlertText = "COLD ALERT";
 				FullAlarmText = "COLD  ALARM";
@@ -3321,7 +2649,7 @@ void ui_update_acecon() {
 
 
 		// Check if Alarms need to be notified
-		if (systemsettings_current.TempAveragingEnabled == true)
+		if (systemSettingsCurrent.isTempAveragingEnabled())
 		{
 			// If Average Temp Value is OVer or Under
 			if (data_global.avgTempState == tst_Over || data_global.avgTempState == tst_Under)
@@ -3364,7 +2692,7 @@ void ui_update_acecon() {
 		// Only update temp when a integer change is detected
 		if (static_cast<int>(data_global.leftTemp_previous) != static_cast<int>(data_global.leftTemp_current) ||
 			static_cast<int>(data_global.rightTemp_previous) != static_cast<int>(data_global.rightTemp_current) ||
-			(systemsettings_current.TempAveragingEnabled == true && static_cast<int>(data_global.avgTemp) != static_cast<int>(data_global.avgTemp)) ||
+			(systemSettingsCurrent.isTempAveragingEnabled() && static_cast<int>(data_global.avgTemp) != static_cast<int>(data_global.avgTemp)) ||
 			data_global.temp_errorFlag_previous != data_global.temp_errorFlag_current ||
 			data_global.leftTempError_current != data_global.leftTempError_previous ||
 			data_global.rightTempError_current != data_global.rightTempError_previous)
@@ -3414,7 +2742,7 @@ void ui_update_acecon() {
         }
 
         
-        if (data_global.engineStalled_current && systemsettings_current.StallMonitorEnabled){
+        if (data_global.engineStalled_current && systemSettingsCurrent.isStallMonitorEnabled()){
             ////MONITOR.println("UI: Adding Engine Stalled State");
             lv_obj_add_state(ui_ImgButtonEngine, LV_STATE_PRESSED);
         } else{
@@ -3445,7 +2773,7 @@ void ui_update_acecon() {
 
         data_global.updateIcons = true;
 
-        if (systemsettings_current.doorDisabled){
+        if (systemSettingsCurrent.isDoorDisabled()){
             //MONITOR.println("UI: Door Disabled");
             lv_obj_add_flag(ui_ImgButtonDoorClosed,LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(ui_ImgButtonDoorOpen,LV_OBJ_FLAG_HIDDEN);
@@ -3814,33 +3142,33 @@ static void menu_AlarmPower_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_VALUE_CHANGED) {
         //MONITOR.print("Alarm Power Changed To: ");
-        systemsettings_previous.AlarmPower = systemsettings_current.AlarmPower;
+        systemSettingsPrevious.setAlarmPower(systemSettingsCurrent.getAlarmPower());
 
         switch(lv_dropdown_get_selected(obj)){
 
             case 0:
                 //MONITOR.println("CarON/CarOFF");
-                systemsettings_current.AlarmPower = PowerOpt::p_CarONCarOFF;
+                systemSettingsCurrent.setAlarmPower(PowerOpt::p_CarONCarOFF);
             break;
 
             case 1:
                 //MONITOR.println("CarON/ManOFF");
-                systemsettings_current.AlarmPower = PowerOpt::p_CarONManOFF;
+                systemSettingsCurrent.setAlarmPower(PowerOpt::p_CarONManOFF);
             break;
 
             case 2:
                 //MONITOR.println("ManON/ManOFF");
-                systemsettings_current.AlarmPower = PowerOpt::p_ManONManOFF;
+                systemSettingsCurrent.setAlarmPower(PowerOpt::p_ManONManOFF);
             break;
 
             case 3:
                 //MONITOR.println("NO K9 LEFT BEHIND");
-                systemsettings_current.AlarmPower = PowerOpt::p_NoK9Left;
+                systemSettingsCurrent.setAlarmPower(PowerOpt::p_NoK9Left);
             break;
 
             case 4:
                 //MONITOR.println("Always OFF");
-                systemsettings_current.AlarmPower = PowerOpt::p_OFF;
+                systemSettingsCurrent.setAlarmPower(PowerOpt::p_OFF);
             break;
 
             default:
@@ -3873,28 +3201,28 @@ static void menu_DoorPower_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_VALUE_CHANGED) {
         //MONITOR.print("Door Power Changed To: ");
-        systemsettings_previous.DoorPower = systemsettings_current.DoorPower;
+        systemSettingsPrevious.setDoorPower(systemSettingsCurrent.getDoorPower());
 
         switch(lv_dropdown_get_selected(obj)){
 
             case 0:
                 //MONITOR.println("CarON/CarOFF");
-                systemsettings_current.DoorPower = DoorOpt::d_CarONCarOFF;
+                systemSettingsCurrent.setDoorPower(DoorOpt::d_CarONCarOFF);
             break;
 
             case 1:
                 //MONITOR.println("CarON/ManOFF");
-                systemsettings_current.DoorPower = DoorOpt::d_CarONManOFF;
+                systemSettingsCurrent.setDoorPower(DoorOpt::d_CarONManOFF);
             break;
 
             case 2:
                 //MONITOR.println("ManON/ManOFF");
-                systemsettings_current.DoorPower = DoorOpt::d_ManONManOFF;
+                systemSettingsCurrent.setDoorPower(DoorOpt::d_ManONManOFF);
             break;
 
             case 3:
                 //MONITOR.println("Always OFF");
-                systemsettings_current.DoorPower = DoorOpt::d_OFF;
+                systemSettingsCurrent.setDoorPower(DoorOpt::d_OFF);
             break;
 
             default:
@@ -3911,7 +3239,7 @@ static String print_Battery_Voltage_Settings(Batt b){
     
     String str;
 
-    switch(systemsettings_current.BatteryVoltage){
+    switch(systemSettingsCurrent.getBatteryVoltage()){
 
         case Batt::b_10:
             return "10.0V";
@@ -3946,9 +3274,9 @@ static void menu_BattVoltSetDown_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_CLICKED) {
         //MONITOR.print("Battery Voltage Setting Changed To: ");
-        systemsettings_previous.BatteryVoltage = systemsettings_current.BatteryVoltage;
+        systemSettingsPrevious.setBatteryVoltage(systemSettingsCurrent.getBatteryVoltage());
 
-        switch (systemsettings_current.BatteryVoltage){
+        switch (systemSettingsCurrent.getBatteryVoltage()){
 
             case Batt::b_10:
                 // Minimum Value
@@ -3956,27 +3284,27 @@ static void menu_BattVoltSetDown_handler(lv_event_t * e)
 
             case Batt::b_105:
                 //MONITOR.println("10.0V");
-                systemsettings_current.BatteryVoltage = Batt::b_10;
+                systemSettingsCurrent.setBatteryVoltage(Batt::b_10);
             break;
 
             case Batt::b_11:
                 //MONITOR.println("10.5V");
-                systemsettings_current.BatteryVoltage = Batt::b_105;                
+                systemSettingsCurrent.setBatteryVoltage(Batt::b_105);                
             break;
 
             case Batt::b_115:
                 //MONITOR.println("11.0V");
-                systemsettings_current.BatteryVoltage = Batt::b_11;
+                systemSettingsCurrent.setBatteryVoltage(Batt::b_11);
             break;
 
             case Batt::b_12:
                 //MONITOR.println("11.5V");
-                systemsettings_current.BatteryVoltage = Batt::b_115;
+                systemSettingsCurrent.setBatteryVoltage(Batt::b_115);
             break;
 
         }
 
-        lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
+        lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemSettingsCurrent.getBatteryVoltage()).c_str());
        
     }
 
@@ -3988,28 +3316,28 @@ static void menu_BattVoltSetUp_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_CLICKED) {
         //MONITOR.print("Battery Voltage Setting Changed To: ");
-        systemsettings_previous.BatteryVoltage = systemsettings_current.BatteryVoltage;
+        systemSettingsPrevious.setBatteryVoltage(systemSettingsCurrent.getBatteryVoltage());
 
-        switch (systemsettings_current.BatteryVoltage){
+        switch (systemSettingsCurrent.getBatteryVoltage()){
 
             case Batt::b_10:
                 //MONITOR.println("10.5V");
-                systemsettings_current.BatteryVoltage = Batt::b_105;
+                systemSettingsCurrent.setBatteryVoltage(Batt::b_105);
             break;
 
             case Batt::b_105:
                 //MONITOR.println("11.0V");
-                systemsettings_current.BatteryVoltage = Batt::b_11;
+                systemSettingsCurrent.setBatteryVoltage(Batt::b_11);
             break;
 
             case Batt::b_11:
                 //MONITOR.println("11.5V");
-                systemsettings_current.BatteryVoltage = Batt::b_115;                
+                systemSettingsCurrent.setBatteryVoltage(Batt::b_115);                
             break;
 
             case Batt::b_115:
                 //MONITOR.println("12.0V");
-                systemsettings_current.BatteryVoltage = Batt::b_12;
+                systemSettingsCurrent.setBatteryVoltage(Batt::b_12);
             break;
 
             case Batt::b_12:
@@ -4018,7 +3346,7 @@ static void menu_BattVoltSetUp_handler(lv_event_t * e)
 
         }
 
-        lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
+        lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemSettingsCurrent.getBatteryVoltage()).c_str());
        
     }
 
@@ -4026,8 +3354,8 @@ static void menu_BattVoltSetUp_handler(lv_event_t * e)
 
 static String print_Alarm_Hot_Set(int index){
     char sz[16];
-    const int* arr = systemsettings_current.AlarmUnitF?HotTempOpt_F:HotTempOpt_C;
-    snprintf(sz,sizeof(sz),"%d %c",arr[index],systemsettings_current.AlarmUnitF?'F':'C');
+    const int* arr = systemSettingsCurrent.isAlarmUnitF()?HotTempOpt_F:HotTempOpt_C;
+    snprintf(sz,sizeof(sz),"%d %c",arr[index],systemSettingsCurrent.isAlarmUnitF()?'F':'C');
     return sz;
     
 }
@@ -4038,15 +3366,15 @@ static void menu_AlarmHotSetUp_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_CLICKED) {
         //MONITOR.print("Alarm Hot Set Changed To: ");
-        systemsettings_previous.AlarmHotSetIndex = systemsettings_current.AlarmHotSetIndex;
+        systemSettingsPrevious.setAlarmHotSetIndex(systemSettingsCurrent.getAlarmHotSetIndex());
 
-        if (systemsettings_current.AlarmHotSetIndex == HotTempArraySize-1){
+        if (systemSettingsCurrent.getAlarmHotSetIndex() == HotTempArraySize-1){
             //MONITOR.println("MAXIMUM VALUE");
         }else{
-            systemsettings_current.AlarmHotSetIndex++;
-            //MONITOR.println(print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex));
+            systemSettingsCurrent.incAlarmHotSetIndex();
+            //MONITOR.println(print_Alarm_Hot_Set(systemSettingsCurrent.AlarmHotSetIndex));
         }
-        lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
+        lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemSettingsCurrent.getAlarmHotSetIndex()).c_str());
         
     }
 
@@ -4058,15 +3386,15 @@ static void menu_AlarmHotSetDown_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_CLICKED) {
         //MONITOR.print("Alarm Hot Set Changed To: ");
-        systemsettings_previous.AlarmHotSetIndex = systemsettings_current.AlarmHotSetIndex;
+        systemSettingsPrevious.setAlarmHotSetIndex(systemSettingsCurrent.getAlarmHotSetIndex());
 
-        if (systemsettings_current.AlarmHotSetIndex == 0){
+        if (systemSettingsCurrent.getAlarmHotSetIndex() == 0){
             // Minimum Value
         }else{
-            systemsettings_current.AlarmHotSetIndex--;
-            //MONITOR.println(print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex));
+            systemSettingsCurrent.decAlarmHotSetIndex();
+            //MONITOR.println(print_Alarm_Hot_Set(systemSettingsCurrent.getAlarmHotSetIndex()));
         }
-        lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
+        lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemSettingsCurrent.getAlarmHotSetIndex()).c_str());
         
     }
 
@@ -4074,8 +3402,8 @@ static void menu_AlarmHotSetDown_handler(lv_event_t * e)
 
 static String print_Alarm_Cold_Set(int index){
     char sz[16];
-    const int* arr = systemsettings_current.AlarmUnitF?ColdTempOpt_F:ColdTempOpt_C;
-    snprintf(sz,sizeof(sz),"%d %c",arr[index],systemsettings_current.AlarmUnitF?'F':'C');
+    const int* arr = systemSettingsCurrent.isAlarmUnitF()?ColdTempOpt_F:ColdTempOpt_C;
+    snprintf(sz,sizeof(sz),"%d %c",arr[index],systemSettingsCurrent.isAlarmUnitF()?'F':'C');
     return sz;
     
 }
@@ -4086,15 +3414,15 @@ static void menu_AlarmColdSetUp_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_CLICKED) {
         //MONITOR.print("Alarm Cold Set Changed To: ");
-        systemsettings_previous.AlarmColdSetIndex = systemsettings_current.AlarmColdSetIndex;
-		systemsettings_current.ColdAlarmEnabled = true;
-        if (systemsettings_current.AlarmColdSetIndex == ColdTempArraySize-1){
+        systemSettingsPrevious.setAlarmColdSetIndex(systemSettingsCurrent.getAlarmColdSetIndex());
+		systemSettingsCurrent.setColdAlarmEnabled(true);
+        if (systemSettingsCurrent.getAlarmColdSetIndex() == ColdTempArraySize-1){
             //MONITOR.println("MAXIMUM VALUE");
         }else{
-            systemsettings_current.AlarmColdSetIndex++;
-            //MONITOR.println(print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex));
+            systemSettingsCurrent.incAlarmColdSetIndex();
+            //MONITOR.println(print_Alarm_Cold_Set(systemSettingsCurrent.getAlarmColdSetIndex()));
         }
-        lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
+        lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemSettingsCurrent.getAlarmColdSetIndex()).c_str());
         
     }
 
@@ -4106,20 +3434,20 @@ static void menu_AlarmColdSetDown_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_CLICKED) {
         //MONITOR.print("Alarm Cold Set Changed To: ");
-        systemsettings_previous.AlarmColdSetIndex = systemsettings_current.AlarmColdSetIndex;
+        systemSettingsPrevious.setAlarmColdSetIndex(systemSettingsCurrent.getAlarmColdSetIndex());
 
-        if (systemsettings_current.AlarmColdSetIndex == 0){
+        if (systemSettingsCurrent.getAlarmColdSetIndex() == 0){
             // Minimum Value
         }else{
-            systemsettings_current.AlarmColdSetIndex--;
-            //MONITOR.println(print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex));
+            systemSettingsCurrent.decAlarmColdSetIndex();
+            //MONITOR.println(print_Alarm_Cold_Set(systemSettingsCurrent.getAlarmColdSetIndex()));
         }
-        if (systemsettings_current.AlarmColdSetIndex==0){
+        if (systemSettingsCurrent.getAlarmColdSetIndex()==0){
 
-			systemsettings_current.ColdAlarmEnabled = false;
+			systemSettingsCurrent.setColdAlarmEnabled(false);
             lv_label_set_text(ui_LabelAlarmColdSetValue,"OFF");
         }else{
-            lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
+            lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemSettingsCurrent.getAlarmColdSetIndex()).c_str());
         }
         
         
@@ -4135,18 +3463,18 @@ static void menu_TempUnits_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_VALUE_CHANGED) {
         //MONITOR.print("Temp Units Changed To: ");
-        systemsettings_previous.AlarmUnitF = systemsettings_current.AlarmUnitF;
+        systemSettingsPrevious.setAlarmUnitF(systemSettingsCurrent.isAlarmUnitF());
 
         switch(lv_dropdown_get_selected(obj)){
 
             case 0:
                 //MONITOR.println("Farenheit");
-                systemsettings_current.AlarmUnitF = true;
+                systemSettingsCurrent.setAlarmUnitF(true);
             break;
 
             case 1:
                 //MONITOR.println("Celsius");
-                systemsettings_current.AlarmUnitF = false;
+                systemSettingsCurrent.setAlarmUnitF(false);
             break;
            
             default:
@@ -4155,8 +3483,8 @@ static void menu_TempUnits_handler(lv_event_t * e)
 
         }
     
-    lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
-    lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str()); 
+    lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemSettingsCurrent.getAlarmColdSetIndex()).c_str());
+    lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemSettingsCurrent.getAlarmHotSetIndex()).c_str()); 
 
     data_global.units_changed = true;
 
@@ -4176,15 +3504,15 @@ static void menu_TempAveraging_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_VALUE_CHANGED) {
         //MONITOR.print("Temp Averaging Changed To: ");
-        systemsettings_previous.TempAveragingEnabled = systemsettings_current.TempAveragingEnabled;
+        systemSettingsPrevious.setTempAveragingEnabled(systemSettingsCurrent.isTempAveragingEnabled());
 
 
         if (lv_obj_get_state(obj) & LV_STATE_CHECKED){
             //MONITOR.println("True");
-            systemsettings_current.TempAveragingEnabled = true;
+            systemSettingsCurrent.setTempAveragingEnabled(true);
         }else{
             //MONITOR.println("False");
-            systemsettings_current.TempAveragingEnabled = false;
+            systemSettingsCurrent.setTempAveragingEnabled(false);
         }
             
     data_global.temp_changed = true;
@@ -4203,14 +3531,14 @@ static void menu_AutoSnooze_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_VALUE_CHANGED) {
         //MONITOR.print("Auto Snooze Changed To: ");
-        systemsettings_previous.AutoSnoozeEnabled = systemsettings_current.AutoSnoozeEnabled;
+        systemSettingsPrevious.setAutoSnoozeEnabled(systemSettingsCurrent.isAutoSnoozeEnabled());
 
         if (lv_obj_get_state(obj) & LV_STATE_CHECKED){
             //MONITOR.println("True");
-            systemsettings_current.AutoSnoozeEnabled = true;
+            systemSettingsCurrent.setAutoSnoozeEnabled(true);
         }else{
             //MONITOR.println("False");
-            systemsettings_current.AutoSnoozeEnabled= false;
+            systemSettingsCurrent.setAutoSnoozeEnabled(false);
         }
  
     }
@@ -4223,15 +3551,15 @@ static void menu_AuxInput_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_VALUE_CHANGED) {
         //MONITOR.print("Aux Input Changed To: ");
-        systemsettings_previous.AuxInputEnabled = systemsettings_current.AuxInputEnabled;
+        systemSettingsPrevious.setAuxInputEnabled(systemSettingsCurrent.isAuxInputEnabled());
 
         if (lv_obj_get_state(obj) & LV_STATE_CHECKED){
             //MONITOR.println("True");
-            systemsettings_current.AuxInputEnabled = true;
+            systemSettingsCurrent.setAuxInputEnabled(true);
 			data_global.AuxEnabled = true;
         }else{
             //MONITOR.println("False");
-            systemsettings_current.AuxInputEnabled= false;
+            systemSettingsCurrent.setAuxInputEnabled(false);
 			data_global.AuxEnabled = false;
         }
             
@@ -4246,14 +3574,14 @@ static void menu_StallMonitor_handler(lv_event_t * e)
     lv_obj_t * obj = lv_event_get_target(e);
     if(code == LV_EVENT_VALUE_CHANGED) {
         //MONITOR.print("Stall Monitor Enabled Changed To: ");
-        systemsettings_previous.StallMonitorEnabled = systemsettings_current.StallMonitorEnabled;
+        systemSettingsPrevious.setStallMonitorEnabled(systemSettingsCurrent.isStallMonitorEnabled());
 
         if (lv_obj_get_state(obj) & LV_STATE_CHECKED){
             //MONITOR.println("True");
-            systemsettings_current.StallMonitorEnabled = true;
+            systemSettingsCurrent.setStallMonitorEnabled(true);
         }else{
             //MONITOR.println("False");
-            systemsettings_current.StallMonitorEnabled= false;
+            systemSettingsCurrent.setStallMonitorEnabled(false);
         }
             
         data_global.engine_changed = true;
@@ -4279,16 +3607,16 @@ static void menu_ExitMenu_handler(lv_event_t * e)
 
 void update_menu_settings(){
 
-    lv_dropdown_set_selected(ui_DropdownAlarmPower,(uint16_t)systemsettings_current.AlarmPower);
-    lv_dropdown_set_selected(ui_DropdownDoorPower,(uint16_t)systemsettings_current.DoorPower);
-    lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemsettings_current.BatteryVoltage).c_str());
-    lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemsettings_current.AlarmHotSetIndex).c_str());
-    lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemsettings_current.AlarmColdSetIndex).c_str());
-    systemsettings_current.AlarmUnitF? lv_dropdown_set_selected(ui_DropdownTempUnits,systemsettings_current.AlarmUnitF?0:1) : lv_dropdown_set_selected(ui_DropdownTempUnits,systemsettings_current.AlarmUnitF?0:1);
-    systemsettings_current.AutoSnoozeEnabled? lv_obj_add_state(ui_CheckboxAutoSnooze,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxAutoSnooze,LV_STATE_CHECKED);
-    systemsettings_current.AuxInputEnabled? lv_obj_add_state(ui_CheckboxAuxIn,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxAuxIn,LV_STATE_CHECKED);
-    systemsettings_current.StallMonitorEnabled? lv_obj_add_state(ui_CheckboxStallMonitor,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxStallMonitor,LV_STATE_CHECKED);
-    systemsettings_current.TempAveragingEnabled? lv_obj_add_state(ui_CheckboxTemperatureAveraging,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxTemperatureAveraging,LV_STATE_CHECKED);
+    lv_dropdown_set_selected(ui_DropdownAlarmPower,(uint16_t)systemSettingsCurrent.getAlarmPower());
+    lv_dropdown_set_selected(ui_DropdownDoorPower,(uint16_t)systemSettingsCurrent.getDoorPower());
+    lv_label_set_text(ui_LabelBattVoltSetValue,print_Battery_Voltage_Settings(systemSettingsCurrent.getBatteryVoltage()).c_str());
+    lv_label_set_text(ui_LabelAlarmHotSetValue,print_Alarm_Hot_Set(systemSettingsCurrent.getAlarmHotSetIndex()).c_str());
+    lv_label_set_text(ui_LabelAlarmColdSetValue,print_Alarm_Cold_Set(systemSettingsCurrent.getAlarmColdSetIndex()).c_str());
+    systemSettingsCurrent.isAlarmUnitF()? lv_dropdown_set_selected(ui_DropdownTempUnits,systemSettingsCurrent.isAlarmUnitF()?0:1) : lv_dropdown_set_selected(ui_DropdownTempUnits,systemSettingsCurrent.isAlarmUnitF()?0:1);
+    systemSettingsCurrent.isAutoSnoozeEnabled()? lv_obj_add_state(ui_CheckboxAutoSnooze,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxAutoSnooze,LV_STATE_CHECKED);
+    systemSettingsCurrent.isAuxInputEnabled()? lv_obj_add_state(ui_CheckboxAuxIn,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxAuxIn,LV_STATE_CHECKED);
+    systemSettingsCurrent.isStallMonitorEnabled()? lv_obj_add_state(ui_CheckboxStallMonitor,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxStallMonitor,LV_STATE_CHECKED);
+    systemSettingsCurrent.isTempAveragingEnabled()? lv_obj_add_state(ui_CheckboxTemperatureAveraging,LV_STATE_CHECKED) : lv_obj_clear_state(ui_CheckboxTemperatureAveraging,LV_STATE_CHECKED);
     
 }
 
@@ -4299,8 +3627,8 @@ static void menu_RestoreDefaults_handler(lv_event_t * e)
     if(code == LV_EVENT_CLICKED) {
         //MONITOR.println("Restoring Default Values");
 
-        systemsettings_previous = systemsettings_current;
-        systemsettings_current = systemsettings_default;
+        systemSettingsPrevious = systemSettingsCurrent;
+        systemSettingsCurrent = systemSettingsDefault;
 
         update_menu_settings();
        
@@ -4310,13 +3638,13 @@ static void menu_RestoreDefaults_handler(lv_event_t * e)
 
 void acedata_parse_serialnumber(String str){
         
-    // systemsettings_current.VIMSerialNumber = str.substring(ACEDATA_VIM_SN_POS,ACEDATA_VIM_SN_POS+ACEDATA_VIM_SN_LENGTH);
+    // systemSettingsCurrent.VIMSerialNumber = str.substring(ACEDATA_VIM_SN_POS,ACEDATA_VIM_SN_POS+ACEDATA_VIM_SN_LENGTH);
 
-    //     ////MONITOR.println("VIM SN:" + systemsettings_current.VIMSerialNumber);
-    // if (systemsettings_previous.VIMSerialNumber != systemsettings_current.VIMSerialNumber){
-    //     systemsettings_previous.VIMSerialNumber = systemsettings_current.VIMSerialNumber;
+    //     ////MONITOR.println("VIM SN:" + systemSettingsCurrent.VIMSerialNumber);
+    // if (systemSettingsPrevious.VIMSerialNumber != systemSettingsCurrent.VIMSerialNumber){
+    //     systemSettingsPrevious.VIMSerialNumber = systemSettingsCurrent.VIMSerialNumber;
     //     ////MONITOR.println("VIM SN Changed:");
-    //     lv_label_set_text(ui_LabelIntelaBoxSNValue,systemsettings_current.VIMSerialNumber.c_str());
+    //     lv_label_set_text(ui_LabelIntelaBoxSNValue,systemSettingsCurrent.VIMSerialNumber.c_str());
     // }
 
 }
@@ -4670,38 +3998,38 @@ void acecon_dev_tick() {
 
 	aceconvalues_current.pps = digitalRead(ACECON_PPS_IN);
 	//system is in gear
-	if (aceconvalues_current.pps == INGEAR)
+	if (aceconvalues_current.pps == GEAR_INGEAR)
 	{
 
 		// Check if a screen update is needed
-		if (data_global.inGear == PARKED)
+		if (data_global.inGear == GEAR_PARKED)
 		{
 			// Set Update Flags
 			data_global.engine_changed = true;
 		}
 
 		// Set to In Gear
-		data_global.inGear = INGEAR;
+		data_global.inGear = GEAR_INGEAR;
 
 		// Enable the clear timer
-		Clear_Gear_Timer.StartTimer(Clear_Gear_Timer.Threshold);
+		Clear_Gear_Timer.startTimer();
 
 	}
 
-	if (Clear_Gear_Timer.OverFlowFlag == true || Clear_Gear_Timer.TimerEnable == false)
+	if (Clear_Gear_Timer.checkOverflow())
 	{
 		// Check if a screen update is needed
-		if (data_global.inGear == INGEAR)
+		if (data_global.inGear == GEAR_INGEAR)
 		{
 			// Set Update Flags
 			data_global.engine_changed = true;
 		}
 
 		// Stop Timer
-		Clear_Gear_Timer.StopTimer();
+		Clear_Gear_Timer.stopTimer();
 
 		// Set to In Park
-		data_global.inGear = PARKED;
+		data_global.inGear = GEAR_PARKED;
 
 	}
 	
@@ -4744,10 +4072,10 @@ void acecon_dev_tick() {
 
         if(aceconvalues_current.pps) {
             lv_obj_add_state(ui_SwitchPPS, LV_STATE_CHECKED);
-            systemsettings_current.doorDisabled = false;
+            systemSettingsCurrent.setDoorDisabled(false);
         } else {
             lv_obj_clear_state(ui_SwitchPPS, LV_STATE_CHECKED);
-            systemsettings_current.doorDisabled = true;
+            systemSettingsCurrent.setDoorDisabled(true);
         }
     }
     if(aceconvalues_previous.ign != aceconvalues_current.ign) {
@@ -4791,7 +4119,7 @@ void check_door_condition(){
 		
     // TODO: fill in Door POPPED and DOOR Disabled condition checks
     // Place Holder Values
-    systemsettings_current.doorDisabled = false;
+    systemSettingsCurrent.setDoorDisabled(false);
     data_global.k9_door_popped = false;
 
 	vim_store(data_global);
@@ -4824,30 +4152,30 @@ void check_cell_signal(){
 
 void Determine_HPS_PPS(SystemState state)
 {
-	if (state.Index == C1_HA_DP_State.Index)
+	if (state.getIndex() == C1_HA_DP_State.getIndex())
 	{
 		set_HPS(HIGH);
 		set_PPS(HIGH);
 	}
-	else if (state.Index == C2_HA_ONLY_State.Index)
+	else if (state.getIndex() == C2_HA_ONLY_State.getIndex())
 	{
 		set_HPS(HIGH);
 		set_PPS(LOW);
 	}
-	else if (state.Index == C3_DP_ONLY_State.Index)
+	else if (state.getIndex() == C3_DP_ONLY_State.getIndex())
 	{
 		set_HPS(LOW);
 		set_PPS(HIGH);
 	}
-	else if (state.Index == D10_PowerDownByPowerPress_State.Index)
+	else if (state.getIndex() == D10_PowerDownByPowerPress_State.getIndex())
 	{
 		set_HPS(HIGH);
 	}
-	else if (state.Index == D1_NOK9LeftBehind_State.Index)
+	else if (state.getIndex() == D1_NOK9LeftBehind_State.getIndex())
 	{
 		set_HPS(HIGH);
 	}
-	else if (state.Index == E1_VIMCommunicationsError_State.Index)
+	else if (state.getIndex() == E1_VIMCommunicationsError_State.getIndex())
 	{
 		set_HPS(HIGH);
 	}
@@ -4865,13 +4193,13 @@ boolean Check_Comms()
 		if (data_global.Comms_OK == true)
 		{
 			// Restart the Timer
-			COMError_Timer.StartTimer(Comm_Error_Timeout);
+			COMError_Timer.startTimer();
 
 			// Clear COMMS flag. SerialEvent will reset this flag when sucessful comms occur again
 			data_global.Comms_OK = false;
 
 		}
-		else if (COMError_Timer.OverFlowFlag == true)
+		else if (COMError_Timer.checkOverflow())
 		{
 
 			return false;
@@ -4895,7 +4223,7 @@ void Process_State_Machine(){
 
 	data_global = vim_load();
 
-	if (A0_Off_State.Index == systemstate_current.Index)
+	if (A0_Off_State.getIndex() == systemstate_current.getIndex())
 	{
 		/*
 		The A0-OFF state is the initial state that the the system is in when it is unpowered. No code operates in this state as a result.
@@ -4903,7 +4231,7 @@ void Process_State_Machine(){
 		*/
 
 		// First Time Section
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
             MONITOR.println("Entered State: A0_Off_State");
 
@@ -4912,7 +4240,7 @@ void Process_State_Machine(){
 			AlarmStateEnabled = false;
 
 			// Set Initial Power Up Flag
-			systemsettings_current.InitialPowerUpFlag = true;
+			systemSettingsCurrent.setInitialPowerUpFlag(true);
 			//MONITOR.println("InitialPowerUpFlag: TRUE");
 
 			// Draw Initial Screen Details
@@ -4922,7 +4250,8 @@ void Process_State_Machine(){
 			//MONITOR.println("Text Loaded");
 
 			// Start Update Timer
-			A0_Off_Timer.StartTimer(A0_Off_Timer.Threshold);
+			A0_Off_Timer.startTimer();
+			
 			//MONITOR.println("Timer Started");
 
 			// Notification Beep
@@ -4936,21 +4265,21 @@ void Process_State_Machine(){
 		else
 		{
 			//MONITOR.println("Entered State: A0_Off_State LOOPING");
-				if (A0_Off_Timer.OverFlowFlag == true)
+				if (A0_Off_Timer.checkOverflow())
 				{
 					// Reset Timer
-					A0_Off_Timer.StopTimer();
+					A0_Off_Timer.stopTimer();
 					//MONITOR.println("A0 Timer Overflow");
 					
 					// Power Applied to System - Go to A1
-					Set_Next_State(A1_PowerApplied_State);
+					systemstate_current.SetNextState(A1_PowerApplied_State);
 					//MONITOR.println("Setting Next State");
 
 				}
 		}
 
 	}
-	else if (A1_PowerApplied_State.Index == systemstate_current.Index)
+	else if (A1_PowerApplied_State.getIndex() == systemstate_current.getIndex())
 	{
 		/*
 		The A1 - Powered Applied State notifies the user that the system is powering on.
@@ -4958,7 +4287,7 @@ void Process_State_Machine(){
 		*/
 
 		// First Time Section
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: A1_PowerApplied_State");
 
@@ -4980,14 +4309,14 @@ void Process_State_Machine(){
 			AlarmStateEnabled = false;
 
 			// Set Initial Power Up Flag
-			systemsettings_current.InitialPowerUpFlag = true;
+			systemSettingsCurrent.setInitialPowerUpFlag(true);
 			//MONITOR.println("InitialPowerUpFlag: TRUE");
 
 			// Normalize State
 			systemstate_previous = systemstate_current;
 
 			// Enable the Timer for the transition
-			A1_PowerApplied_Timer.StartTimer(1500);
+			A1_PowerApplied_Timer.startTimer();
 
 
 		}
@@ -4995,10 +4324,10 @@ void Process_State_Machine(){
 		else
 		{
 			// Check Timer
-			if (A1_PowerApplied_Timer.OverFlowFlag == true)
+			if (A1_PowerApplied_Timer.checkOverflow())
 			{
 				// Stop Timer
-				A1_PowerApplied_Timer.StopTimer();
+				A1_PowerApplied_Timer.stopTimer();
 
 				// ================== Transitions =======================
 
@@ -5034,7 +4363,7 @@ void Process_State_Machine(){
 
 
 	}
-	else if (A3_IgnitionOn_State.Index == systemstate_current.Index)
+	else if (A3_IgnitionOn_State.getIndex() == systemstate_current.getIndex())
 	{
 		/*
 		The A3 - Ignition On State notifies the user that the system is powering on via The ignition being on.
@@ -5042,7 +4371,7 @@ void Process_State_Machine(){
 		*/
 
 		// First Time Section
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: A3_IgnitionOn_State");
 
@@ -5064,14 +4393,14 @@ void Process_State_Machine(){
 			AlarmStateEnabled = false;
 
 			// Set Initial Power Up Flag
-			systemsettings_current.InitialPowerUpFlag = true;
+			systemSettingsCurrent.setInitialPowerUpFlag(true);
 			//MONITOR.println("InitialPowerUpFlag: TRUE");
 
 			// Normalize State
 			systemstate_previous = systemstate_current;
 
 			// Enable the Timer for the transition
-			A1_PowerApplied_Timer.StartTimer(1500);
+			A3_IgnitionOn_Timer.startTimer();
 
 
 		}
@@ -5079,10 +4408,10 @@ void Process_State_Machine(){
 		else
 		{
 			// Check Timer
-			if (A1_PowerApplied_Timer.OverFlowFlag == true)
+			if (A3_IgnitionOn_Timer.checkOverflow())
 			{
 				// Stop Timer
-				A1_PowerApplied_Timer.StopTimer();
+				A3_IgnitionOn_Timer.stopTimer();
 
 				// ================== Transitions =======================
 
@@ -5094,10 +4423,10 @@ void Process_State_Machine(){
 
 
 	}
-	else if (B1_MenuHelp_State.Index == systemstate_current.Index)
+	else if (B1_MenuHelp_State.getIndex() == systemstate_current.getIndex())
 	{	
 		
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{	
 			MONITOR.println("Entered State: B1_MenuHelp_State");
 
@@ -5110,16 +4439,16 @@ void Process_State_Machine(){
 
 			//MONITOR.println("Starting Timer: B1_MenuHelp_State");
 			// Enable the Timers
-			B1_MenuHelp_Timer.StartTimer(3000);
+			B1_MenuHelp_Timer.startTimer();
 
 			// Reset NoK9Timeout Flag
 			NoK9TimeoutFlag = false;
 
 			// VIM Communications Timer
-			COMError_Timer.StartTimer(Comm_Error_Timeout);
+			COMError_Timer.startTimer();
 
 			// Enable Initial Power Up Timer
-			InitialPowerUp_Timer.StartTimer(InitialPowerUp_Timer.Threshold);
+			InitialPowerUp_Timer.startTimer();
 
 			// Clear Alarm Enabled Flag
 			Reset_System_Alarm_State();
@@ -5137,16 +4466,16 @@ void Process_State_Machine(){
 			//MONITOR.println("Looping State: B1_MenuHelp_State");
 			
 			// Clear Initial Power Up Flag 
-			if (systemsettings_current.InitialPowerUpFlag == true)
+			if (systemSettingsCurrent.isInitialPowerUp())
 			{
-				if (InitialPowerUp_Timer.CheckOverflow())
+				if (InitialPowerUp_Timer.checkOverflow())
 				{
-					InitialPowerUp_Timer.OverFlowFlag = false;
+					InitialPowerUp_Timer.stopTimer();
 
 					MONITOR.println("InitialPowerUpFlag: FALSE");
 
 					// Only Update after the Flag has Overflowed. to ensure the system has had enough time to stabilize.
-					systemsettings_current.InitialPowerUpFlag = false;
+					systemSettingsCurrent.setInitialPowerUpFlag(false);
 				}
 
 			}
@@ -5155,20 +4484,20 @@ void Process_State_Machine(){
 			if (Check_Comms() == false)
 			{
 				// Stop Timers
-				COMError_Timer.StopTimer();
-				B1_MenuHelp_Timer.StopTimer();
+				COMError_Timer.stopTimer();
+				B1_MenuHelp_Timer.stopTimer();
 
 				// Go To E1 VIM Communications Error
 				Set_Next_State(E1_VIMCommunicationsError_State);
 
 			}
 			// Menu Help State Timer Overflowed
-			else if (B1_MenuHelp_Timer.OverFlowFlag == true)
+			else if (B1_MenuHelp_Timer.checkOverflow())
 			{
 				MONITOR.println("Leaving State: B1_MenuHelp_State");
 				// Stop Timers
-				COMError_Timer.StopTimer();
-				B1_MenuHelp_Timer.StopTimer();
+				COMError_Timer.stopTimer();
+				B1_MenuHelp_Timer.stopTimer();
 
 				Set_Determined_State();
 
@@ -5178,9 +4507,9 @@ void Process_State_Machine(){
 
 
 	}
-	else if (C1_HA_DP_State.Index == systemstate_current.Index)
+	else if (C1_HA_DP_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: C1_HA_DP_State");
 
@@ -5195,10 +4524,7 @@ void Process_State_Machine(){
 			
 
 			// Enable Comm Error Timer if not allready enabled
-			if (E1_VIMCommunicationsError_Timer.TimerEnable == false)
-			{
-				COMError_Timer.StartTimer(Comm_Error_Timeout);
-			}
+			COMError_Timer.startTimer();
 
 			// Set Alarm Enabled Flag
 			Reset_System_Alarm_State();
@@ -5217,7 +4543,7 @@ void Process_State_Machine(){
 			if (Check_Comms() == false)
 			{
 				// Stop Timers
-				COMError_Timer.StopTimer();
+				COMError_Timer.stopTimer();
 
 				// Go To E1 VIM Communications Error
 				Set_Next_State(E1_VIMCommunicationsError_State);
@@ -5227,22 +4553,22 @@ void Process_State_Machine(){
 			// Ignition is OFF
 			if (data_global.ignitionOn_current == false)
 			{
-				if (systemsettings_current.DoorPower == DoorOpt::d_CarONCarOFF)
+				if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONCarOFF)
 				{
-					if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
+					if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF)
 					{
 						Set_Next_State(D8_PowerDownByIgnitionOFF_State);
 					}
-					else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
+					else if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
 					{
 						Set_Next_State(D1_NOK9LeftBehind_State);
 					}
-					else if (systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF ||
-						systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
+					else if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONManOFF ||
+						systemSettingsCurrent.getAlarmPower() == PowerOpt::p_ManONManOFF)
 					{
 						// CODE EXCEPTION! NEEDED TO PREVENT ISSUE #2 for Rev 019
 						// Prevents the door icon from briefly displaying as red for this transition.
-						data_global.inGear = PARKED;
+						data_global.inGear = GEAR_PARKED;
 						
 
 						Set_Next_State(C2_HA_ONLY_State);
@@ -5250,25 +4576,25 @@ void Process_State_Machine(){
 
 
 				}
-				else if (systemsettings_current.DoorPower == DoorOpt::d_CarONManOFF)
+				else if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONManOFF)
 				{
-					if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
+					if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF)
 					{
 						Set_Next_State(C3_DP_ONLY_State);
 					}
-					else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
+					else if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
 					{
 						Set_Next_State(D1_NOK9LeftBehind_State);
 					}
 
 				}
-				else if (systemsettings_current.DoorPower == DoorOpt::d_ManONManOFF)
+				else if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_ManONManOFF)
 				{
-					if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
+					if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF)
 					{
 						Set_Next_State(C3_DP_ONLY_State);
 					}
-					else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
+					else if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
 					{
 						Set_Next_State(D1_NOK9LeftBehind_State);
 					}
@@ -5291,9 +4617,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (C2_HA_ONLY_State.Index == systemstate_current.Index)
+	else if (C2_HA_ONLY_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: C2_HAOnly_State");
 
@@ -5308,13 +4634,10 @@ void Process_State_Machine(){
 			}
 
 			// Enable Comm Error Timer if not allready enabled
-			if (E1_VIMCommunicationsError_Timer.TimerEnable == false)
-			{
-				COMError_Timer.StartTimer(Comm_Error_Timeout);
-			}
+			COMError_Timer.startTimer();
 
 			// Enable Initial Power Up Timer
-			InitialPowerUp_Timer.StartTimer(InitialPowerUp_Timer.Threshold);
+			InitialPowerUp_Timer.startTimer();
 
 			// Set Alarm Enabled Flag
 			Reset_System_Alarm_State();
@@ -5332,7 +4655,7 @@ void Process_State_Machine(){
 			if (Check_Comms() == false)
 			{
 				// Stop Timers
-				COMError_Timer.StopTimer();
+				COMError_Timer.stopTimer();
 
 				// Go To E1 VIM Communications Error
 				Set_Next_State(E1_VIMCommunicationsError_State);
@@ -5342,13 +4665,13 @@ void Process_State_Machine(){
 			// Ignition is OFF
 			if (data_global.ignitionOn_current == false)
 			{
-				if (systemsettings_current.DoorPower == DoorOpt::d_OFF)
+				if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_OFF)
 				{
-					if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF)
+					if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF)
 					{
 						Set_Next_State(D8_PowerDownByIgnitionOFF_State);
 					}
-					else if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
+					else if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
 					{
 						Set_Next_State(D1_NOK9LeftBehind_State);
 					}
@@ -5361,13 +4684,13 @@ void Process_State_Machine(){
 				// Reset NoK9 Timeout Flag
 				NoK9TimeoutFlag = false;
 
-				if (systemsettings_current.DoorPower == DoorOpt::d_CarONCarOFF)
+				if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONCarOFF)
 				{
-					if (systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF || systemsettings_current.AlarmPower == PowerOpt::p_ManONManOFF)
+					if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONManOFF || systemSettingsCurrent.getAlarmPower() == PowerOpt::p_ManONManOFF)
 					{
 						// CODE EXCEPTION! NEEDED TO PREVENT ISSUE #2 for Rev 019
 						// PRevents the door icon from briefly displaying as red for this transition.
-						data_global.inGear = PARKED;
+						data_global.inGear = GEAR_PARKED;
 						
 
 						Set_Next_State(C1_HA_DP_State);
@@ -5379,9 +4702,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (C3_DP_ONLY_State.Index == systemstate_current.Index)
+	else if (C3_DP_ONLY_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: C3_DP_ONLY_State");
 
@@ -5395,10 +4718,7 @@ void Process_State_Machine(){
 			}
 
 			// Enable Comm Error Timer if not allready enabled
-			if (E1_VIMCommunicationsError_Timer.TimerEnable == false)
-			{
-				COMError_Timer.StartTimer(Comm_Error_Timeout);
-			}
+			COMError_Timer.startTimer();
 
 			// Clear Alarm Enabled Flag
 			Reset_System_Alarm_State();
@@ -5419,9 +4739,9 @@ void Process_State_Machine(){
 				data_global.ignitionEdge_previous = data_global.ignitionEdge_current;
 				data_global.ignitionEdge_current = IgnEdge::it_None;
 
-				if (systemsettings_current.AlarmPower == PowerOpt::p_OFF)
+				if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_OFF)
 				{
-					if (systemsettings_current.DoorPower == DoorOpt::d_CarONCarOFF)
+					if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONCarOFF)
 					{
 						Set_Next_State(D8_PowerDownByIgnitionOFF_State);
 					}
@@ -5434,9 +4754,9 @@ void Process_State_Machine(){
 				data_global.ignitionEdge_previous = data_global.ignitionEdge_current;
 				data_global.ignitionEdge_current = IgnEdge::it_None;
 
-				if (systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF || systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
+				if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF || systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left)
 				{
-					if (systemsettings_current.DoorPower == DoorOpt::d_CarONManOFF || systemsettings_current.DoorPower == DoorOpt::d_ManONManOFF)
+					if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONManOFF || systemSettingsCurrent.getDoorPower() == DoorOpt::d_ManONManOFF)
 					{
 						Set_Next_State(C1_HA_DP_State);
 					}
@@ -5447,26 +4767,21 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (D1_NOK9LeftBehind_State.Index == systemstate_current.Index)
+	else if (D1_NOK9LeftBehind_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: D1_NoK9LeftBehind_State");
 
 			// ================== Display =======================
 			lv_scr_load(ui_NoK9Screen);
-
-			// Enable Comm Error Timer if not allready enabled
-			if (E1_VIMCommunicationsError_Timer.TimerEnable == false)
-			{
-				COMError_Timer.StartTimer(Comm_Error_Timeout);
-			}
-
+			
 			// Initialize Timers
-			NoK9Blink_Timer.StartTimer(NoK9Blink_Timer.Threshold);
-			NoK9Beep_Timer.StartTimer(NoK9Beep_Timer.Threshold);
-			NoK9FirstAlert_Timer.StartTimer(NoK9FirstAlert_Timer.Threshold);
-			NoK9SecondAlert_Timer.StartTimer(NoK9SecondAlert_Timer.Threshold);
+			COMError_Timer.startTimer();
+			NoK9Blink_Timer.startTimer();
+			NoK9Beep_Timer.startTimer();
+			NoK9FirstAlert_Timer.startTimer();
+			NoK9SecondAlert_Timer.startTimer();
 
 			TootCount = 0;
 
@@ -5484,7 +4799,7 @@ void Process_State_Machine(){
 			if (Check_Comms() == false)
 			{
 				// Stop Timers
-				COMError_Timer.StopTimer();
+				COMError_Timer.stopTimer();
 
 				// Go To E1 VIM Communications Error
 				Set_Next_State(E1_VIMCommunicationsError_State);
@@ -5495,9 +4810,9 @@ void Process_State_Machine(){
 			//Ignition turned on
 			if (data_global.ignitionOn_current == true)
 			{
-				if (systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left)
+				if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left)
 				{
-					if (systemsettings_current.DoorPower == DoorOpt::d_CarONCarOFF || systemsettings_current.DoorPower == DoorOpt::d_CarONManOFF)
+					if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONCarOFF || systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONManOFF)
 					{
 						Set_Next_State(C1_HA_DP_State);
 					}
@@ -5516,24 +4831,24 @@ void Process_State_Machine(){
 			}
 
 			// Blink the "Remove K9" Text
-			if (NoK9Blink_Timer.OverFlowFlag == true)
+			if (NoK9Blink_Timer.checkOverflow())
 			{
 				
 
 			}
 
 			// Beep Twice
-			if (NoK9Beep_Timer.OverFlowFlag == true)
+			if (NoK9Beep_Timer.checkOverflow())
 			{
 				// Beep Twice
 				//Set_SoundPulse(PulseProfile::pp_TripleBeep);
 
 				// Reset Timer
-				NoK9Beep_Timer.StartTimer(NoK9Beep_Timer.Threshold);
+				NoK9Beep_Timer.startTimer();
 
 			}
 
-			if (NoK9FirstAlert_Timer.OverFlowFlag == true)
+			if (NoK9FirstAlert_Timer.checkOverflow())
 			{
 				// Send Toot Trigger
 				TX_Toot_Needed = true;
@@ -5541,10 +4856,10 @@ void Process_State_Machine(){
 				TootCount = 1;
 
 				// Stop Timer
-				NoK9FirstAlert_Timer.StopTimer();
+				NoK9FirstAlert_Timer.stopTimer();
 			}
 
-			if (NoK9SecondAlert_Timer.OverFlowFlag == true)
+			if (NoK9SecondAlert_Timer.checkOverflow())
 			{
 				// Send Toot Trigger
 				TX_Toot_Needed = true;
@@ -5552,10 +4867,10 @@ void Process_State_Machine(){
 				TootCount = 2;
 
 				// Stop All Timers
-				NoK9Blink_Timer.StopTimer();
-				NoK9Beep_Timer.StopTimer();
-				NoK9FirstAlert_Timer.StopTimer();
-				NoK9SecondAlert_Timer.StopTimer();
+				NoK9Blink_Timer.stopTimer();
+				NoK9Beep_Timer.stopTimer();
+				NoK9FirstAlert_Timer.stopTimer();
+				NoK9SecondAlert_Timer.stopTimer();
 
 			}
 
@@ -5563,7 +4878,7 @@ void Process_State_Machine(){
 			if (TX_Toot_Needed == false && TootCount == 2)
 			{
 
-				if (systemsettings_current.DoorPower == DoorOpt::d_CarONCarOFF || systemsettings_current.DoorPower == DoorOpt::d_CarONManOFF)
+				if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONCarOFF || systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONManOFF)
 				{
 					// Set TimeoutFlag to prevent C1/C2 Flash Rev 029
 					NoK9TimeoutFlag = true;
@@ -5587,9 +4902,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (D6_NoK9LeftBehindPowerDownByDoorOpened_State.Index == systemstate_current.Index)
+	else if (D6_NoK9LeftBehindPowerDownByDoorOpened_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: D6_NoK9LeftBehindPowerDownByDoorOpened_State");
 
@@ -5598,7 +4913,7 @@ void Process_State_Machine(){
 			lv_label_set_text(ui_LabelPowerDownScreen,"D6_NoK9LeftBehind PowerDown By Door Opened");
 
 			// Start Timer
-			D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.StartTimer(4000);
+			D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.startTimer();
 
 
 			//MONITOR.println("No K9 Timeout Flag Set To FALSE");
@@ -5619,10 +4934,10 @@ void Process_State_Machine(){
 		{
 
 			// Timer Overflowed
-			if (D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.OverFlowFlag == true)
+			if (D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.checkOverflow())
 			{
 				// Stop Timers
-				D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.StopTimer();
+				D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.stopTimer();
 
 				Set_Next_State(S1_Sleep_State);
 
@@ -5631,9 +4946,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (D7_PowerDownByOKPress_State.Index == systemstate_current.Index)
+	else if (D7_PowerDownByOKPress_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: D7_PowerDownByOKPress_State");
 
@@ -5642,7 +4957,7 @@ void Process_State_Machine(){
 			lv_label_set_text(ui_LabelPowerDownScreen,"D7_PowerDownByOKPress");
 
 			// Start Timer
-			D7_PowerDownByOKPress_Timer.StartTimer(4000);
+			D7_PowerDownByOKPress_Timer.startTimer();
 
 
 			//MONITOR.println("No K9 Timeout Flag Set To FALSE");
@@ -5663,10 +4978,10 @@ void Process_State_Machine(){
 		{
 
 			// Timer Overflowed
-			if (D7_PowerDownByOKPress_Timer.OverFlowFlag == true)
+			if (D7_PowerDownByOKPress_Timer.checkOverflow())
 			{
 				// Stop Timers
-				D7_PowerDownByOKPress_Timer.StopTimer();
+				D7_PowerDownByOKPress_Timer.stopTimer();
 
 				Set_Next_State(S1_Sleep_State);
 
@@ -5675,9 +4990,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (D8_PowerDownByIgnitionOFF_State.Index == systemstate_current.Index)
+	else if (D8_PowerDownByIgnitionOFF_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: D8_PowerDownByIgnitionOFF_State");
 
@@ -5686,7 +5001,7 @@ void Process_State_Machine(){
 			lv_label_set_text(ui_LabelPowerDownScreen,"D8_PowerDownByIgnitionOFF");
 
 			// Start Timer
-			D8_PowerDownByIgnitionOFF_Timer.StartTimer(4000);
+			D8_PowerDownByIgnitionOFF_Timer.startTimer();
 
 
 			//MONITOR.println("No K9 Timeout Flag Set To FALSE");
@@ -5706,10 +5021,10 @@ void Process_State_Machine(){
 		else
 		{
 			// Timer Overflowed
-			if (D8_PowerDownByIgnitionOFF_Timer.OverFlowFlag == true)
+			if (D8_PowerDownByIgnitionOFF_Timer.checkOverflow())
 			{
 				// Stop Timers
-				D8_PowerDownByIgnitionOFF_Timer.StopTimer();
+				D8_PowerDownByIgnitionOFF_Timer.stopTimer();
 
 				Set_Next_State(S1_Sleep_State);
 
@@ -5717,9 +5032,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (D9_PowerDownByHAandDPSetToAlwaysOFF_State.Index == systemstate_current.Index)
+	else if (D9_PowerDownByHAandDPSetToAlwaysOFF_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: D9_PowerDownByHAandDPSetToAlwaysOFF_State");
 
@@ -5728,7 +5043,7 @@ void Process_State_Machine(){
 			lv_label_set_text(ui_LabelPowerDownScreen,"D9_PowerDownByHAandDPSetToAlwaysOFF");
 
 			// Start Timer
-			D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.StartTimer(4000);
+			D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.startTimer();
 
 
 			//MONITOR.println("No K9 Timeout Flag Set To FALSE");
@@ -5748,10 +5063,10 @@ void Process_State_Machine(){
 		else
 		{
 			// Timer Overflowed
-			if (D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.OverFlowFlag == true)
+			if (D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.checkOverflow())
 			{
 				// Stop Timers
-				D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.StopTimer();
+				D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.stopTimer();
 
 				Set_Next_State(S1_Sleep_State);
 
@@ -5759,9 +5074,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (D10_PowerDownByPowerPress_State.Index == systemstate_current.Index)
+	else if (D10_PowerDownByPowerPress_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: D10 Power Down By Power Press");
 
@@ -5770,7 +5085,7 @@ void Process_State_Machine(){
 			lv_label_set_text(ui_LabelPowerDownScreen,"D10 Power Down By Power Press");
 
 			// Start Timer
-			D10_PowerDownByPowerPress_Timer.StartTimer(4000);
+			D10_PowerDownByPowerPress_Timer.startTimer();
 
 
 			//MONITOR.println("No K9 Timeout Flag Set To FALSE");
@@ -5790,10 +5105,10 @@ void Process_State_Machine(){
 		else
 		{
 			// Timer Overflowed
-			if (D10_PowerDownByPowerPress_Timer.OverFlowFlag == true)
+			if (D10_PowerDownByPowerPress_Timer.checkOverflow())
 			{
 				// Stop Timers
-				D10_PowerDownByPowerPress_Timer.StopTimer();
+				D10_PowerDownByPowerPress_Timer.stopTimer();
 
 				Set_Next_State(S1_Sleep_State);
 
@@ -5801,9 +5116,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (E3_Unknown_State.Index == systemstate_current.Index)
+	else if (E3_Unknown_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: E3_Unknown_State");
 
@@ -5816,9 +5131,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (S1_Sleep_State.Index == systemstate_current.Index)
+	else if (S1_Sleep_State.getIndex() == systemstate_current.getIndex())
 	{
-		if (systemstate_previous.Index != systemstate_current.Index)
+		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
 		{
 			MONITOR.println("Entered State: S1_Sleep_State");
 
@@ -5844,8 +5159,8 @@ void Process_State_Machine(){
 
 			// Ignition Rising Edge Detected
 			if (data_global.ignitionEdge_current == IgnEdge::it_Rising &&
-				(systemsettings_current.AlarmPower == PowerOpt::p_CarONManOFF || systemsettings_current.AlarmPower == PowerOpt::p_CarONCarOFF || systemsettings_current.AlarmPower == PowerOpt::p_NoK9Left ||
-					systemsettings_current.DoorPower == DoorOpt::d_CarONCarOFF || systemsettings_current.DoorPower == DoorOpt::d_CarONManOFF))
+				(systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONManOFF || systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF || systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left ||
+					systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONCarOFF || systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONManOFF))
 			{
 				Set_Next_State(A3_IgnitionOn_State);
 			}
@@ -5922,17 +5237,17 @@ bool Check_FOTA_DOWNLOAD_DONE()
 
 void FOTA_Loop(){
 
-	if (CurrentFOTACode != FOTA_Done)
+	if (fotaOps.getFOTACode() != FOTACode::FOTA_Done)
 	{
-		switch (CurrentFOTACode)
+		switch (fotaOps.getFOTACode())
 		{
-		case FOTA_None:
+		case FOTACode::FOTA_None:
 
 			// Initial Checks
-			if (PreviousFOTACode != CurrentFOTACode)
+			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				MONITOR.println("FOTA None");
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}else
 			{
 				
@@ -5940,34 +5255,34 @@ void FOTA_Loop(){
 
 			break;
 
-		case FOTA_Begin:
+		case FOTACode::FOTA_Begin:
 
 			// Initial Checks
-			if (PreviousFOTACode != CurrentFOTACode)
+			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				MONITOR.println("FOTA Begin");
 
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
 			{
 				MONITOR.println("FOTA Begin: Update Partition");
 				esp_ota_begin(esp_ota_get_next_update_partition(NULL), OTA_SIZE_UNKNOWN, &ota_handle);
 
-				CurrentFOTACode = FOTACode::FOTA_Initiate;
+				fotaOps.setFOTACode(FOTACode::FOTA_Initiate);
 			}
 
 			break;
 
-		case FOTA_Initiate:
+		case FOTACode::FOTA_Initiate:
 
 			// Initial Checks
-			if (PreviousFOTACode != CurrentFOTACode)
+			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				MONITOR.println("FOTA Initiate");
 				String str = "";
               	on_monitor_begin_fota(str.c_str());
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
 			{
@@ -5975,7 +5290,7 @@ void FOTA_Loop(){
 				if (last_packet.cmd == COMMAND_ID::UPDATE){
 
 					// XBee Sent first Update packet
-					CurrentFOTACode = FOTA_Downloading;
+					fotaOps.setFOTACode(FOTACode::FOTA_Downloading);
 
 				}
 				
@@ -5986,16 +5301,16 @@ void FOTA_Loop(){
 
 			break;
 
-		case FOTA_Downloading:
+		case FOTACode::FOTA_Downloading:
 
 			
 
 			// Initial Checks
-			if (PreviousFOTACode != CurrentFOTACode)
+			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				
-				packetnum = 0;
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPacketNum(0);
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
 			{
@@ -6009,25 +5324,25 @@ void FOTA_Loop(){
 						
 						MONITOR.println("FOTA Downloading: FOTA Unsuccessful");
 
-						PreviousFOTACode = CurrentFOTACode;
-						CurrentFOTACode = FOTA_Fail;
+						fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
+						fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 
 					}
 					
-					PreviousFOTACode = CurrentFOTACode;
-					CurrentFOTACode = FOTA_Success;
+					fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
+					fotaOps.setFOTACode(FOTACode::FOTA_Success);
 					
 				}
 				else if (last_packet.cmd == COMMAND_ID::UPDATE)
 				{
-					packetnum++;
+					fotaOps.incPacketNum();
 					last_packet.cmd = (COMMAND_ID)NULL;
-					MONITOR.printf("FOTA Downloading: Packet Received: #%d\n",packetnum);
+					MONITOR.printf("FOTA Downloading: Packet Received: #%d\n",fotaOps.getPacketNum());
 					// FOTA LOOPING CODE SECTION
 					if(ESP_OK!=esp_ota_write(ota_handle,update_data.data,(size_t)update_data.size)) {
 						MONITOR.println("Failed to open file for appending");
-						PreviousFOTACode = CurrentFOTACode;
-						CurrentFOTACode = FOTACode::FOTA_Fail;
+						fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
+						fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 					}
 					
 				}else{
@@ -6041,32 +5356,32 @@ void FOTA_Loop(){
 
 			break;
 
-		case FOTA_Fail:
+		case FOTACode::FOTA_Fail:
 
 			// Initial Checks
-			if (PreviousFOTACode != CurrentFOTACode)
+			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				MONITOR.println("FOTA Fail");
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
 			{
 				// Move on to CheckFW
-				// CurrentFOTACode = FOTA_Downloading;
+				// fotaOps.setFOTACode(FOTA_Downloading);
 
 				
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 
 			break;
 
-		case FOTA_Success:
+		case FOTACode::FOTA_Success:
 
 			// Initial Checks
-			if (PreviousFOTACode != CurrentFOTACode)
+			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				MONITOR.println("FOTA Success: Waiting for User to Allow FOTA Update");
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
 			{
@@ -6074,19 +5389,19 @@ void FOTA_Loop(){
 				MONITOR.println("FOTA Done:: Reseting ESP");
 				ESP.restart(); // reset the Arduino via software function
 
-				CurrentFOTACode = FOTACode::FOTA_Done;
+				fotaOps.setFOTACode(FOTACode::FOTA_Done);
 				
 			}
 
 			break;
 
-		case FOTA_Done:
+		case FOTACode::FOTA_Done:
 
 			// Initial Checks
-			if (PreviousFOTACode != CurrentFOTACode)
+			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
 			{
@@ -6097,40 +5412,38 @@ void FOTA_Loop(){
 
 			break;
 
-		case FOTA_DeleteFW:
+		case FOTACode::FOTA_DeleteFW:
 
 			// Initial Checks
-			if (PreviousFOTACode != CurrentFOTACode)
+			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				MONITOR.println("FOTA DeleteFW");
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
 			{
 				// Move on to CheckFW
-				// CurrentFOTACode = FOTA_Downloading;
+				// fotaOps.getFOTACode() = FOTA_Downloading;
 
-				
-				PreviousFOTACode = CurrentFOTACode;
 			}
 
 			break;
 
-		case FOTA_Rollback:
+		case FOTACode::FOTA_Rollback:
 
 			// Initial Checks
-			if (PreviousFOTACode != CurrentFOTACode)
+			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				MONITOR.println("FOTA Rollback");
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
 			{
 				// Move on to CheckFW
-				// CurrentFOTACode = FOTA_Downloading;
+				// fotaOps.getFOTACode() = FOTA_Downloading;
 
 				
-				PreviousFOTACode = CurrentFOTACode;
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 
 			break;
@@ -6144,7 +5457,6 @@ void FOTA_Loop(){
 
 
 }
-
 
 void setup() {
 	MONITOR.begin(115200);
@@ -6241,19 +5553,19 @@ void setup() {
       
     //================================================== Set System Defaults =========================================*/
     
-    systemsettings_default.AlarmPower = p_OFF;
-    systemsettings_default.AutoSnoozeEnabled = false;
-    systemsettings_default.AuxInputEnabled = false;
-    systemsettings_default.BatteryVoltage = b_12;
-    systemsettings_default.DoorPower = d_CarONCarOFF;
-    systemsettings_default.StallMonitorEnabled = true;
-    systemsettings_default.TempAveragingEnabled = true;
-    systemsettings_default.doorDisabled = false;
-    systemsettings_default.AlarmUnitF = true;
-    systemsettings_default.AlarmHotSetIndex = 3;
-    systemsettings_default.AlarmColdSetIndex = 7;
-	systemsettings_default.System_Sleep = false;		// State Flag to determine if the system was been put to sleep
-	systemsettings_default.InitialPowerUpFlag = true;   // State flag to determine if the system was just powered on, clears when an idle screen is entered
+    systemSettingsDefault.setAlarmPower(PowerOpt::p_ManONManOFF);
+    systemSettingsDefault.setAutoSnoozeEnabled(false);
+    systemSettingsDefault.setAuxInputEnabled(false);
+    systemSettingsDefault.setBatteryVoltage(b_12);
+    systemSettingsDefault.setDoorPower(d_ManONManOFF);
+    systemSettingsDefault.setStallMonitorEnabled(true);
+    systemSettingsDefault.setTempAveragingEnabled(true);
+    systemSettingsDefault.setDoorDisabled(false);
+    systemSettingsDefault.setAlarmUnitF(true);
+    systemSettingsDefault.setAlarmHotSetIndex(3);
+    systemSettingsDefault.setAlarmColdSetIndex(7);
+	systemSettingsDefault.setSystemSleep(false);		// State Flag to determine if the system was been put to sleep
+	systemSettingsDefault.setInitialPowerUpFlag(true);   // State flag to determine if the system was just powered on, clears when an idle screen is entered
 	
     SettingsLoaded = load_settings();
 
@@ -6265,7 +5577,7 @@ void setup() {
     Init_SystemStates();
 	Init_Timers();
 
-    systemsettings_previous = systemsettings_current;
+    systemSettingsPrevious = systemSettingsCurrent;
 	//MONITOR.printf("vim_load\n");
 	data_global = vim_load();
 
@@ -6356,27 +5668,25 @@ void loop() {
 
 	vTaskDelay(5);
 
-	if (MainLoop_Timer.OverFlowFlag){
+	if (MainLoop_Timer.checkOverflow()){
 
-		MainLoop_Timer.OverFlowFlag = false;
+		MainLoop_Timer.startTimer();
 
-		MainLoop_Timer.StartTimer(MainLoop_Timer.Threshold);
+		MONITOR.println("================== LOOP B ====================");
 
-		MONITOR.println("================== LOOP A ====================");
+		// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
+		check_door_condition();
 
-		// // //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
-		// check_door_condition();
-
-		// // //MONITOR.printf("ui_update_ACECON\n");
-		// ui_update_acecon();
+		// //MONITOR.printf("ui_update_ACECON\n");
+		ui_update_acecon();
 		
-		// // //================================================== State Machine Logic =========================================*/
+		// //================================================== State Machine Logic =========================================*/
 		
-		// Process_System_Alarm_States();
+		Process_System_Alarm_States();
 	
-		// Process_State_Machine();
+		Process_State_Machine();
 
-		// ui_update_icons();
+		ui_update_icons();
 
 		
 
