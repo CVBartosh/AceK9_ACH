@@ -14,6 +14,9 @@ extern const int HotTempOpt_C[HotTempArraySize];
 extern const int ColdTempOpt_F[ColdTempArraySize];
 extern const int ColdTempOpt_C[ColdTempArraySize];
 
+enum TempState {tst_OK,tst_Warning,tst_Over, tst_OverPlus,tst_Under};
+enum IgnEdge{it_None,it_Falling,it_Rising};
+
 // Enumerations for power options, door options, and battery voltage
 enum PowerOpt {
     p_CarONCarOFF,
@@ -92,11 +95,6 @@ public:
     void setInitialPowerUpFlag(bool flag);
     bool isInitialPowerUp() const;
 
-    // Example usage:
-    // SystemSettings settings;
-    // settings.setAutoSnoozeEnabled(true);
-    // bool isEnabled = settings.isAutoSnoozeEnabled();
-
 private:
     // Member variables
     bool tempAveragingEnabled;
@@ -114,6 +112,10 @@ private:
     bool systemSleep;           // State flag to determine if the system has been put to sleep
     bool initialPowerUpFlag;    // State flag to determine if the system was just powered on
 };
+
+const char* doorOptToString(DoorOpt door);
+const char* powerOptToString(PowerOpt powerr);
+const char* battToString(Batt battLevel);
 
 // Global instances of SystemSettings
 extern SystemSettings systemSettingsCurrent;

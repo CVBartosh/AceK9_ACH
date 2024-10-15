@@ -2,7 +2,6 @@
 #define STATEMACHINE_HPP
 
 #include <Arduino.h>
-#include "FOTAOps.hpp" // Include the FOTAOps header
 #include "SystemSettings.hpp"
 #include "vim_controller.hpp"
 
@@ -27,16 +26,27 @@ public:
     // Constructor
     StateMachine();
 
-    // Public methods
-    void setNextState(StateID id);
+    // Accessor methods
+    StateID getCurrentState() const;
+    StateID getPreviousState() const;
+
+    // Mutator methods
+    void setCurrentState(StateID state);
+    void setPreviousState(StateID state);
+    void syncStates();
+    
+    void setNextState(const StateID& nextState);
     StateID determineNextState();
     void setDeterminedState();
+    bool isCurrentState(const StateID& state);
+    bool isPreviousState(const StateID& state);
+
+    const char* systemStateToString(StateID state);
 
 private:
 
     StateID systemStateCurrent;
     StateID systemStatePrevious;
-    StateID storedNextState;
     
 };
 

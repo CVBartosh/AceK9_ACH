@@ -27,6 +27,8 @@ enum PowerOnTrigger {
     IgnitionOn
 };
 
+const char* powerOnTriggerToString(PowerOnTrigger trigger);
+
 // SystemInput class definition
 class SystemInput {
 public:

@@ -51,9 +51,10 @@ bool NoK9BlinkToggle = false;
 struct last_packet_info {
     STATUS_CODE status; // = STATUS_CODE::SUCCESS;
     COMMAND_ID cmd; // = (COMMAND_ID)0;
+	uint32_t value;
 	bool processed;
 };
-static last_packet_info last_packet = {STATUS_CODE::SUCCESS,(COMMAND_ID)0,true};
+static last_packet_info last_packet = {STATUS_CODE::SUCCESS,(COMMAND_ID)0,0,true};
 
 struct last_at_info {
     char commandstr[2];
@@ -86,9 +87,6 @@ int COM_Retry_Attempts = 0;
 #define COM_Retry_Threshold 3
 
 #include "SystemSettings.hpp"
-SystemSettings systemSettingsCurrent;
-SystemSettings systemSettingsPrevious;
-SystemSettings systemSettingsDefault;
 
 #define EngineStallThreshold  1
 
@@ -212,42 +210,9 @@ vim_data data_global;
 //================================================== FOTA Stuff =========================================
 #include "FOTAOps.hpp"
 
-FOTAOps fotaOps;
-
 //================================================== State Machine Stuff =========================================
-
-
-
 #include "StateMachine.hpp"
-
 StateMachine stateMachine;
-
-SystemState systemstate_current;
-SystemState systemstate_previous;
-SystemState StoredNextState; // Used for manually directing another state where to go next. Used very sparingly
-
-SystemState A0_Off_State;
-SystemState A1_PowerApplied_State;
-SystemState A3_IgnitionOn_State;
-SystemState B1_MenuHelp_State;
-SystemState C1_HA_DP_State;
-SystemState C2_HA_ONLY_State;
-SystemState C3_DP_ONLY_State;
-SystemState D1_NOK9LeftBehind_State;
-SystemState D2_PressOKToConfirm_State;
-SystemState D6_NoK9LeftBehindPowerDownByDoorOpened_State;
-SystemState D7_PowerDownByOKPress_State;
-SystemState D8_PowerDownByIgnitionOFF_State;
-SystemState D9_PowerDownByHAandDPSetToAlwaysOFF_State;
-SystemState D10_PowerDownByPowerPress_State;
-SystemState D11_UpdatingFirmware_State;
-SystemState E1_VIMCommunicationsError_State;
-SystemState E3_Unknown_State;
-SystemState S1_Sleep_State;
-SystemState G1_SystemTestConfirm_State;
-SystemState G2_SystemTest_State;
-
-
 
 //================================================== Timer Stuff =========================================
 #include "CustomTimer.hpp"
@@ -609,6 +574,8 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
             memcpy(&pck,payload+5,payload_length-5);
             //MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
             last_packet.cmd = pck.cmd_ID;
+			last_packet.value = pck.pktValue;
+			MONITOR.printf("payload total packet: %d\n",(int)pck.pktValue);
 			last_packet.processed = false;
             last_received = true;
         }
@@ -2184,15 +2151,16 @@ void on_monitor_check_fota(const char* str) {
     
 }
 
-void on_monitor_begin_fota(const char* str) {
+void on_monitor_fota_request_packet(uint32_t pkt_num) {
     
     last_packet.cmd = COMMAND_ID::FOTA;
-	last_packet.status = STATUS_CODE::FOTA_BEGIN;
+	last_packet.status = STATUS_CODE::FOTA_REQUEST_PACKET;
 	last_packet.processed = true;
 	
     fota_packet data;
     memset(&data, 0, sizeof(data));
-	data.fotaStatus = STATUS_CODE::FOTA_BEGIN;    
+	data.pktValue = pkt_num;
+	data.fotaStatus = STATUS_CODE::FOTA_REQUEST_PACKET;    
         
     uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
     
@@ -2302,8 +2270,9 @@ void monitor_dev_tick(HardwareSerial& s) {
             on_monitor_config(str.c_str());
         } else if (cmd=="check fota"){
 			on_monitor_check_fota(str.c_str());
-		} else if (cmd=="begin fota"){
-			on_monitor_begin_fota(str.c_str());
+		} else if (cmd.substring(0,13) =="request fota "){
+			MONITOR.println("Requesting FOTA Packet: " + String(cmd.substring(13).toInt()));
+			on_monitor_fota_request_packet(cmd.substring(13).toInt());
 		} else if (cmd=="delete file"){
 			on_monitor_delete_file(str.c_str());
 		}else if (cmd=="subscribe config"){
@@ -4150,32 +4119,32 @@ void check_cell_signal(){
 
 }
 
-void Determine_HPS_PPS(SystemState state)
+void Determine_HPS_PPS(StateID state)
 {
-	if (state.getIndex() == C1_HA_DP_State.getIndex())
+	if (state == ID_C1_HA_DP)
 	{
 		set_HPS(HIGH);
 		set_PPS(HIGH);
 	}
-	else if (state.getIndex() == C2_HA_ONLY_State.getIndex())
+	else if (state == ID_C2_HA_ONLY)
 	{
 		set_HPS(HIGH);
 		set_PPS(LOW);
 	}
-	else if (state.getIndex() == C3_DP_ONLY_State.getIndex())
+	else if (state == ID_C3_DP_ONLY)
 	{
 		set_HPS(LOW);
 		set_PPS(HIGH);
 	}
-	else if (state.getIndex() == D10_PowerDownByPowerPress_State.getIndex())
+	else if (state == ID_D10_PowerDownByPowerPress)
 	{
 		set_HPS(HIGH);
 	}
-	else if (state.getIndex() == D1_NOK9LeftBehind_State.getIndex())
+	else if (state == ID_D1_NOK9LeftBehind)
 	{
 		set_HPS(HIGH);
 	}
-	else if (state.getIndex() == E1_VIMCommunicationsError_State.getIndex())
+	else if (state == ID_E1_VIMCommunicationsError)
 	{
 		set_HPS(HIGH);
 	}
@@ -4223,7 +4192,7 @@ void Process_State_Machine(){
 
 	data_global = vim_load();
 
-	if (A0_Off_State.getIndex() == systemstate_current.getIndex())
+	if (stateMachine.isCurrentState(ID_A0_Off))
 	{
 		/*
 		The A0-OFF state is the initial state that the the system is in when it is unpowered. No code operates in this state as a result.
@@ -4231,7 +4200,7 @@ void Process_State_Machine(){
 		*/
 
 		// First Time Section
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
             MONITOR.println("Entered State: A0_Off_State");
 
@@ -4258,7 +4227,7 @@ void Process_State_Machine(){
 			//Set_SoundPulse(PulseProfile::pp_SingleBeep);
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
         }
 
 		// Looping Section
@@ -4272,14 +4241,15 @@ void Process_State_Machine(){
 					//MONITOR.println("A0 Timer Overflow");
 					
 					// Power Applied to System - Go to A1
-					systemstate_current.SetNextState(A1_PowerApplied_State);
+					stateMachine.setNextState(ID_A1_PowerApplied);
 					//MONITOR.println("Setting Next State");
+					
 
 				}
 		}
 
 	}
-	else if (A1_PowerApplied_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_A1_PowerApplied))
 	{
 		/*
 		The A1 - Powered Applied State notifies the user that the system is powering on.
@@ -4287,9 +4257,9 @@ void Process_State_Machine(){
 		*/
 
 		// First Time Section
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
-			MONITOR.println("Entered State: A1_PowerApplied_State");
+			MONITOR.println("Entered State: ID_A1_PowerApplied");
 
 			// Store Power On Trigger
 			CurrentPowerOnTrigger = PowerOnTrigger::Applied;
@@ -4313,7 +4283,7 @@ void Process_State_Machine(){
 			//MONITOR.println("InitialPowerUpFlag: TRUE");
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 
 			// Enable the Timer for the transition
 			A1_PowerApplied_Timer.startTimer();
@@ -4352,7 +4322,7 @@ void Process_State_Machine(){
 					// 	break;
 					// }		
 
-				Set_Next_State(B1_MenuHelp_State);
+				stateMachine.setNextState(ID_B1_MenuHelp);
 
 				
 
@@ -4363,7 +4333,7 @@ void Process_State_Machine(){
 
 
 	}
-	else if (A3_IgnitionOn_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_A3_IgnitionOn))
 	{
 		/*
 		The A3 - Ignition On State notifies the user that the system is powering on via The ignition being on.
@@ -4371,7 +4341,7 @@ void Process_State_Machine(){
 		*/
 
 		// First Time Section
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
 			MONITOR.println("Entered State: A3_IgnitionOn_State");
 
@@ -4397,7 +4367,7 @@ void Process_State_Machine(){
 			//MONITOR.println("InitialPowerUpFlag: TRUE");
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 
 			// Enable the Timer for the transition
 			A3_IgnitionOn_Timer.startTimer();
@@ -4415,7 +4385,7 @@ void Process_State_Machine(){
 
 				// ================== Transitions =======================
 
-				Set_Next_State(B1_MenuHelp_State);
+				stateMachine.setNextState(ID_B1_MenuHelp);
 
 			}
 
@@ -4423,21 +4393,21 @@ void Process_State_Machine(){
 
 
 	}
-	else if (B1_MenuHelp_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_B1_MenuHelp))
 	{	
 		
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{	
-			MONITOR.println("Entered State: B1_MenuHelp_State");
+			MONITOR.println("Entered State: ID_B1_MenuHelp");
 
 			// ================== Display =======================
 			lv_scr_load(ui_MenuHelpScreen);
 
-			//MONITOR.println("Determine Next State: B1_MenuHelp_State");
+			//MONITOR.println("Determine Next State: ID_B1_MenuHelp");
 			// ================== Operation =======================
-			Determine_HPS_PPS(Determine_Next_State());
+			Determine_HPS_PPS(stateMachine.determineNextState());
 
-			//MONITOR.println("Starting Timer: B1_MenuHelp_State");
+			//MONITOR.println("Starting Timer: ID_B1_MenuHelp");
 			// Enable the Timers
 			B1_MenuHelp_Timer.startTimer();
 
@@ -4454,16 +4424,16 @@ void Process_State_Machine(){
 			Reset_System_Alarm_State();
 			AlarmStateEnabled = false;
 
-			//MONITOR.println("Normalizing State: B1_MenuHelp_State");
+			//MONITOR.println("Normalizing State: ID_B1_MenuHelp");
 			// Normalize State
-			systemstate_previous= systemstate_current;
+			stateMachine.syncStates();
 			//MONITOR.println("Exiting State Initial Loop");
 
 		}
 		else
 		{
 			// ================== Transitions =======================
-			//MONITOR.println("Looping State: B1_MenuHelp_State");
+			//MONITOR.println("Looping State: ID_B1_MenuHelp");
 			
 			// Clear Initial Power Up Flag 
 			if (systemSettingsCurrent.isInitialPowerUp())
@@ -4488,18 +4458,18 @@ void Process_State_Machine(){
 				B1_MenuHelp_Timer.stopTimer();
 
 				// Go To E1 VIM Communications Error
-				Set_Next_State(E1_VIMCommunicationsError_State);
+				stateMachine.setNextState(ID_E1_VIMCommunicationsError);
 
 			}
 			// Menu Help State Timer Overflowed
 			else if (B1_MenuHelp_Timer.checkOverflow())
 			{
-				MONITOR.println("Leaving State: B1_MenuHelp_State");
+				MONITOR.println("Leaving State: ID_B1_MenuHelp");
 				// Stop Timers
 				COMError_Timer.stopTimer();
 				B1_MenuHelp_Timer.stopTimer();
 
-				Set_Determined_State();
+				stateMachine.setDeterminedState();
 
 			}
 
@@ -4507,11 +4477,11 @@ void Process_State_Machine(){
 
 
 	}
-	else if (C1_HA_DP_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_C1_HA_DP))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
-			MONITOR.println("Entered State: C1_HA_DP_State");
+			MONITOR.println("Entered State: ID_C1_HA_DP");
 
 			// Assign HPs and PPS as necessary
 			set_HPS(HIGH);
@@ -4533,7 +4503,7 @@ void Process_State_Machine(){
 
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 
 		}
 		else
@@ -4546,7 +4516,7 @@ void Process_State_Machine(){
 				COMError_Timer.stopTimer();
 
 				// Go To E1 VIM Communications Error
-				Set_Next_State(E1_VIMCommunicationsError_State);
+				stateMachine.setNextState(ID_E1_VIMCommunicationsError);
 
 			}
 
@@ -4557,11 +4527,11 @@ void Process_State_Machine(){
 				{
 					if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF)
 					{
-						Set_Next_State(D8_PowerDownByIgnitionOFF_State);
+						stateMachine.setNextState(ID_D8_PowerDownByIgnitionOFF);
 					}
 					else if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
 					{
-						Set_Next_State(D1_NOK9LeftBehind_State);
+						stateMachine.setNextState(ID_D1_NOK9LeftBehind);
 					}
 					else if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONManOFF ||
 						systemSettingsCurrent.getAlarmPower() == PowerOpt::p_ManONManOFF)
@@ -4571,7 +4541,7 @@ void Process_State_Machine(){
 						data_global.inGear = GEAR_PARKED;
 						
 
-						Set_Next_State(C2_HA_ONLY_State);
+						stateMachine.setNextState(ID_C2_HA_ONLY);
 					}
 
 
@@ -4580,11 +4550,11 @@ void Process_State_Machine(){
 				{
 					if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF)
 					{
-						Set_Next_State(C3_DP_ONLY_State);
+						stateMachine.setNextState(ID_C3_DP_ONLY);
 					}
 					else if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
 					{
-						Set_Next_State(D1_NOK9LeftBehind_State);
+						stateMachine.setNextState(ID_D1_NOK9LeftBehind);
 					}
 
 				}
@@ -4592,11 +4562,11 @@ void Process_State_Machine(){
 				{
 					if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF)
 					{
-						Set_Next_State(C3_DP_ONLY_State);
+						stateMachine.setNextState(ID_C3_DP_ONLY);
 					}
 					else if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
 					{
-						Set_Next_State(D1_NOK9LeftBehind_State);
+						stateMachine.setNextState(ID_D1_NOK9LeftBehind);
 					}
 
 				}
@@ -4617,9 +4587,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (C2_HA_ONLY_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_C2_HA_ONLY))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
 			MONITOR.println("Entered State: C2_HAOnly_State");
 
@@ -4645,7 +4615,7 @@ void Process_State_Machine(){
 
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 		}
 		else
 		{
@@ -4658,7 +4628,7 @@ void Process_State_Machine(){
 				COMError_Timer.stopTimer();
 
 				// Go To E1 VIM Communications Error
-				Set_Next_State(E1_VIMCommunicationsError_State);
+				stateMachine.setNextState(ID_E1_VIMCommunicationsError);
 
 			}
 
@@ -4669,11 +4639,11 @@ void Process_State_Machine(){
 				{
 					if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF)
 					{
-						Set_Next_State(D8_PowerDownByIgnitionOFF_State);
+						stateMachine.setNextState(ID_D8_PowerDownByIgnitionOFF);
 					}
 					else if (systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left && NoK9TimeoutFlag == false)
 					{
-						Set_Next_State(D1_NOK9LeftBehind_State);
+						stateMachine.setNextState(ID_D1_NOK9LeftBehind);
 					}
 				}
 			}
@@ -4693,7 +4663,7 @@ void Process_State_Machine(){
 						data_global.inGear = GEAR_PARKED;
 						
 
-						Set_Next_State(C1_HA_DP_State);
+						stateMachine.setNextState(ID_C1_HA_DP);
 					}
 				}
 			}
@@ -4702,11 +4672,11 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (C3_DP_ONLY_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_C3_DP_ONLY))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
-			MONITOR.println("Entered State: C3_DP_ONLY_State");
+			MONITOR.println("Entered State: ID_C3_DP_ONLY");
 
 			// Assign HPs and PPS as necessary
 			set_HPS(LOW);
@@ -4727,7 +4697,7 @@ void Process_State_Machine(){
 
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 
 		}
 		else
@@ -4743,7 +4713,7 @@ void Process_State_Machine(){
 				{
 					if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONCarOFF)
 					{
-						Set_Next_State(D8_PowerDownByIgnitionOFF_State);
+						stateMachine.setNextState(ID_D8_PowerDownByIgnitionOFF);
 					}
 
 
@@ -4758,7 +4728,7 @@ void Process_State_Machine(){
 				{
 					if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONManOFF || systemSettingsCurrent.getDoorPower() == DoorOpt::d_ManONManOFF)
 					{
-						Set_Next_State(C1_HA_DP_State);
+						stateMachine.setNextState(ID_C1_HA_DP);
 					}
 				}
 			}
@@ -4767,9 +4737,9 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (D1_NOK9LeftBehind_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_D1_NOK9LeftBehind))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
 			MONITOR.println("Entered State: D1_NoK9LeftBehind_State");
 
@@ -4790,7 +4760,7 @@ void Process_State_Machine(){
 			AlarmStateEnabled = false;
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 		}
 		else
 		{
@@ -4802,7 +4772,7 @@ void Process_State_Machine(){
 				COMError_Timer.stopTimer();
 
 				// Go To E1 VIM Communications Error
-				Set_Next_State(E1_VIMCommunicationsError_State);
+				stateMachine.setNextState(ID_E1_VIMCommunicationsError);
 
 			}
 			
@@ -4814,11 +4784,11 @@ void Process_State_Machine(){
 				{
 					if (systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONCarOFF || systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONManOFF)
 					{
-						Set_Next_State(C1_HA_DP_State);
+						stateMachine.setNextState(ID_C1_HA_DP);
 					}
 					else
 					{
-						Set_Next_State(C2_HA_ONLY_State);
+						stateMachine.setNextState(ID_C2_HA_ONLY);
 					}
 				}
 			}
@@ -4826,7 +4796,7 @@ void Process_State_Machine(){
 			// Door Opened
 			if (data_global.k9_door_open_current)
 			{
-				Set_Next_State(D6_NoK9LeftBehindPowerDownByDoorOpened_State);
+				stateMachine.setNextState(ID_D6_NoK9LeftBehindPowerDownByDoorOpened);
 
 			}
 
@@ -4883,14 +4853,14 @@ void Process_State_Machine(){
 					// Set TimeoutFlag to prevent C1/C2 Flash Rev 029
 					NoK9TimeoutFlag = true;
 
-					Set_Next_State(C1_HA_DP_State);
+					stateMachine.setNextState(ID_C1_HA_DP);
 				}
 				else
 				{
 					// Set TimeoutFlag to prevent C1/C2 Flash Rev 029
 					NoK9TimeoutFlag = true;
 
-					Set_Next_State(C2_HA_ONLY_State);
+					stateMachine.setNextState(ID_C2_HA_ONLY);
 				}
 			}
 
@@ -4902,11 +4872,11 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (D6_NoK9LeftBehindPowerDownByDoorOpened_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_D6_NoK9LeftBehindPowerDownByDoorOpened))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
-			MONITOR.println("Entered State: D6_NoK9LeftBehindPowerDownByDoorOpened_State");
+			MONITOR.println("Entered State: ID_D6_NoK9LeftBehindPowerDownByDoorOpened");
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
@@ -4928,7 +4898,7 @@ void Process_State_Machine(){
 			AlarmStateEnabled = false;
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 		}
 		else
 		{
@@ -4939,16 +4909,16 @@ void Process_State_Machine(){
 				// Stop Timers
 				D6_NoK9LeftBehindPowerDownByDoorOpened_Timer.stopTimer();
 
-				Set_Next_State(S1_Sleep_State);
+				stateMachine.setNextState(ID_S1_Sleep);
 
 			}
 
 		}
 
 	}
-	else if (D7_PowerDownByOKPress_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_D7_PowerDownByOKPress))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
 			MONITOR.println("Entered State: D7_PowerDownByOKPress_State");
 
@@ -4972,7 +4942,7 @@ void Process_State_Machine(){
 			AlarmStateEnabled = false;
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 		}
 		else
 		{
@@ -4983,18 +4953,18 @@ void Process_State_Machine(){
 				// Stop Timers
 				D7_PowerDownByOKPress_Timer.stopTimer();
 
-				Set_Next_State(S1_Sleep_State);
+				stateMachine.setNextState(ID_S1_Sleep);
 
 			}
 
 		}
 
 	}
-	else if (D8_PowerDownByIgnitionOFF_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_D8_PowerDownByIgnitionOFF))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
-			MONITOR.println("Entered State: D8_PowerDownByIgnitionOFF_State");
+			MONITOR.println("Entered State: ID_D8_PowerDownByIgnitionOFF");
 
 			// ================== Display =======================
 			lv_scr_load(ui_PowerDownScreen);
@@ -5016,7 +4986,7 @@ void Process_State_Machine(){
 			AlarmStateEnabled = false;
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 		}
 		else
 		{
@@ -5026,15 +4996,15 @@ void Process_State_Machine(){
 				// Stop Timers
 				D8_PowerDownByIgnitionOFF_Timer.stopTimer();
 
-				Set_Next_State(S1_Sleep_State);
+				stateMachine.setNextState(ID_S1_Sleep);
 
 			}
 		}
 
 	}
-	else if (D9_PowerDownByHAandDPSetToAlwaysOFF_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_D9_PowerDownByHAandDPSetToAlwaysOFF))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
 			MONITOR.println("Entered State: D9_PowerDownByHAandDPSetToAlwaysOFF_State");
 
@@ -5058,7 +5028,7 @@ void Process_State_Machine(){
 			AlarmStateEnabled = false;
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 		}
 		else
 		{
@@ -5068,15 +5038,15 @@ void Process_State_Machine(){
 				// Stop Timers
 				D9_PowerDownByHAandDPSetToAlwaysOFF_Timer.stopTimer();
 
-				Set_Next_State(S1_Sleep_State);
+				stateMachine.setNextState(ID_S1_Sleep);
 
 			}
 		}
 
 	}
-	else if (D10_PowerDownByPowerPress_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_D10_PowerDownByPowerPress))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
 			MONITOR.println("Entered State: D10 Power Down By Power Press");
 
@@ -5100,7 +5070,7 @@ void Process_State_Machine(){
 			AlarmStateEnabled = false;
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 		}
 		else
 		{
@@ -5110,20 +5080,20 @@ void Process_State_Machine(){
 				// Stop Timers
 				D10_PowerDownByPowerPress_Timer.stopTimer();
 
-				Set_Next_State(S1_Sleep_State);
+				stateMachine.setNextState(ID_S1_Sleep);
 
 			}
 		}
 
 	}
-	else if (E3_Unknown_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_E3_UNKNOWN))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
 			MONITOR.println("Entered State: E3_Unknown_State");
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 		}
 		else
 		{
@@ -5131,11 +5101,11 @@ void Process_State_Machine(){
 		}
 
 	}
-	else if (S1_Sleep_State.getIndex() == systemstate_current.getIndex())
+	else if (stateMachine.isCurrentState(ID_S1_Sleep))
 	{
-		if (systemstate_previous.getIndex() != systemstate_current.getIndex())
+		if (!stateMachine.isPreviousState(stateMachine.getCurrentState()))
 		{
-			MONITOR.println("Entered State: S1_Sleep_State");
+			MONITOR.println("Entered State: ID_S1_Sleep");
 
 			lv_scr_load(ui_SleepScreen);
 			lv_textarea_set_text(ui_SleepTextArea,"S1_Sleep");
@@ -5151,7 +5121,7 @@ void Process_State_Machine(){
 			
 
 			// Normalize State
-			systemstate_previous = systemstate_current;
+			stateMachine.syncStates();
 		}
 		else
 		{
@@ -5162,7 +5132,7 @@ void Process_State_Machine(){
 				(systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONManOFF || systemSettingsCurrent.getAlarmPower() == PowerOpt::p_CarONCarOFF || systemSettingsCurrent.getAlarmPower() == PowerOpt::p_NoK9Left ||
 					systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONCarOFF || systemSettingsCurrent.getDoorPower() == DoorOpt::d_CarONManOFF))
 			{
-				Set_Next_State(A3_IgnitionOn_State);
+				stateMachine.setNextState(ID_A3_IgnitionOn);
 			}
 			
 
@@ -5207,7 +5177,8 @@ bool Check_FOTA_FW()
 		{
 
 			// MONITOR.println("XBEE Cell Connected");
-
+			fotaOps.setTotalPackets(last_packet.value);
+			last_packet.value = 0;
 			last_packet.cmd = (COMMAND_ID)NULL;
 			last_packet.status = (STATUS_CODE)NULL;
 
@@ -5261,15 +5232,26 @@ void FOTA_Loop(){
 			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				MONITOR.println("FOTA Begin");
-
+				
+				// Check FW
+				String blank;
+				on_monitor_check_fota(blank.c_str());
+				
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
 			{
-				MONITOR.println("FOTA Begin: Update Partition");
-				esp_ota_begin(esp_ota_get_next_update_partition(NULL), OTA_SIZE_UNKNOWN, &ota_handle);
 
-				fotaOps.setFOTACode(FOTACode::FOTA_Initiate);
+				if (Check_FOTA_FW()){
+										
+					// FW file exists
+					fotaOps.setFOTACode(FOTACode::FOTA_Initiate);
+
+				}
+				else{
+					// Add Timeout
+				}
+								
 			}
 
 			break;
@@ -5280,27 +5262,20 @@ void FOTA_Loop(){
 			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				MONITOR.println("FOTA Initiate");
-				String str = "";
-              	on_monitor_begin_fota(str.c_str());
+
+				MONITOR.println("FOTA Iniatiate: Update Partition");
+				esp_ota_begin(esp_ota_get_next_update_partition(NULL), OTA_SIZE_UNKNOWN, &ota_handle);
+
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
 			{
-
-				if (last_packet.cmd == COMMAND_ID::UPDATE){
-
-					// XBee Sent first Update packet
-					fotaOps.setFOTACode(FOTACode::FOTA_Downloading);
-
-				}
 				
-
-
-				
+				fotaOps.setFOTACode(FOTACode::FOTA_Downloading);
 			}
 
 			break;
-
+		
 		case FOTACode::FOTA_Downloading:
 
 			
@@ -5310,6 +5285,8 @@ void FOTA_Loop(){
 			{
 				
 				fotaOps.setPacketNum(0);
+              	on_monitor_fota_request_packet(fotaOps.getPacketNum());
+
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
 			else
@@ -5324,31 +5301,37 @@ void FOTA_Loop(){
 						
 						MONITOR.println("FOTA Downloading: FOTA Unsuccessful");
 
-						fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 						fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 
 					}
 					
-					fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 					fotaOps.setFOTACode(FOTACode::FOTA_Success);
 					
 				}
+				else if (fotaOps.getPacketNum() >= fotaOps.getTotalPackets()){
+
+					// TODO: ADD IN A TIMEOUT SECTION
+					MONITOR.printf("FOTA Downloading: Packet Overflow: Total Packets: #%d Received: #%d\n",fotaOps.getTotalPackets(),fotaOps.getPacketNum());
+
+				}
 				else if (last_packet.cmd == COMMAND_ID::UPDATE)
 				{
-					fotaOps.incPacketNum();
 					last_packet.cmd = (COMMAND_ID)NULL;
+					
 					MONITOR.printf("FOTA Downloading: Packet Received: #%d\n",fotaOps.getPacketNum());
 					// FOTA LOOPING CODE SECTION
 					if(ESP_OK!=esp_ota_write(ota_handle,update_data.data,(size_t)update_data.size)) {
 						MONITOR.println("Failed to open file for appending");
-						fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
+						
 						fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 					}
+					else{
+
+						fotaOps.incPacketNum();
+						on_monitor_fota_request_packet(fotaOps.getPacketNum());
+
+					}
 					
-				}else{
-
-					// TODO: ADD IN A TIMEOUT SECTION
-
 				}
 
 
@@ -5466,7 +5449,7 @@ void setup() {
     display_init();
     input_init();
     ui_init();
-    vim_init(process_vim);
+    vim_init(process_vim,nullptr);
 
     //================================================== Menu Events =========================================*/
     lv_obj_add_event_cb(ui_DropdownAlarmPower, menu_AlarmPower_handler, LV_EVENT_ALL, NULL);
@@ -5574,8 +5557,7 @@ void setup() {
 
     //================================================== State Machine Initialization =========================================*/
 
-    Init_SystemStates();
-	Init_Timers();
+    Init_Timers();
 
     systemSettingsPrevious = systemSettingsCurrent;
 	//MONITOR.printf("vim_load\n");
@@ -5612,12 +5594,12 @@ void loop() {
         if (last_packet.status == STATUS_CODE::XBEE_INITIALIZED){
             
             if (xbee_initialized){
-                //MONITOR.println("====================WARNING=============================");
-                //MONITOR.println("XBEE Reset During Operation");
+                MONITOR.println("====================WARNING=============================");
+                MONITOR.println("XBEE Reset During Operation");
                 xbee_reset = true;
             }
 
-            //MONITOR.println("XBEE Initialized");
+            MONITOR.println("XBEE Initialized");
             xbee_initialized = true;
             
             last_packet.cmd = (COMMAND_ID)NULL;
@@ -5672,7 +5654,7 @@ void loop() {
 
 		MainLoop_Timer.startTimer();
 
-		MONITOR.println("================== LOOP B ====================");
+		MONITOR.println("================== LOOP A ====================");
 
 		// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
 		check_door_condition();

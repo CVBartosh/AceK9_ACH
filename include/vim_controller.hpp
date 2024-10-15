@@ -1,10 +1,8 @@
+#pragma once
 #include <Arduino.h>
+#include "SystemSettings.hpp"
+
 /// @brief vim_data: the VIM information goes here
-
-enum TempState {tst_OK,tst_Warning,tst_Over, tst_OverPlus,tst_Under};
-enum BatteryThreshold {B_100=100,B_105=105,B_110=110,B_115=115,B_120=120};
-enum IgnEdge{it_None,it_Falling,it_Rising};
-
 struct vim_data {
     // System Settings
     char VIMSerialNumber[24];
@@ -44,7 +42,7 @@ struct vim_data {
     bool temp_errorFlag_previous;
 
     // Battery Variables
-    BatteryThreshold BatterySetting = BatteryThreshold::B_100;
+    Batt BatterySetting = Batt::b_10;
     float voltage;
     int BadBatteryCounter=0;
     bool batt_error_previous;
@@ -83,7 +81,7 @@ void vim_write_sz(const char* sz);
 /// @brief Initialize the VIM serial
 /// @param callback The callback when a VIM message is received
 /// @param state Any associated user state (optional)
-void vim_init(vim_on_receive_cb callback,void* state = nullptr);
+void vim_init(vim_on_receive_cb callback,void* state);
 /// @brief Store VIM state for access from on_receive
 /// @param newData the data to store
 void vim_store(const vim_data& newData);

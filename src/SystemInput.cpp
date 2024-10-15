@@ -43,5 +43,15 @@ PowerOnTrigger SystemInput::getPowerOnTrigger() const {
     return currentPowerOnTrigger;
 }
 
+const char* powerOnTriggerToString(PowerOnTrigger trigger) {
+    switch (trigger) {
+        case NoTrigger: return "NoTrigger";
+        case Applied: return "Applied";
+        case PowerButtonPress: return "PowerButtonPress";
+        case IgnitionOn: return "IgnitionOn";
+        default: return "Unknown PowerOnTrigger";
+    }
+}
+
 // Global instance of SystemInput
 SystemInput systemInput;

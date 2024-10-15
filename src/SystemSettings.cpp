@@ -160,6 +160,39 @@ bool SystemSettings::isInitialPowerUp() const {
     return initialPowerUpFlag;
 }
 
+const char* powerOptToString(PowerOpt power) {
+    switch (power) {
+        case p_CarONCarOFF: return "p_CarONCarOFF";
+        case p_CarONManOFF: return "p_CarONManOFF";
+        case p_ManONManOFF: return "p_ManONManOFF";
+        case p_NoK9Left: return "p_NoK9Left";
+        case p_OFF: return "p_OFF";
+        default: return "Unknown PowerOpt";
+    }
+}
+
+const char* doorOptToString(DoorOpt door) {
+    switch (door) {
+        case d_CarONCarOFF: return "d_CarONCarOFF";
+        case d_CarONManOFF: return "d_CarONManOFF";
+        case d_ManONManOFF: return "d_ManONManOFF";
+        case d_OFF: return "d_OFF";
+        default: return "Unknown DoorOpt";
+    }
+}
+
+const char* battToString(Batt battLevel) {
+    switch (battLevel) {
+        case b_10: return "b_10";
+        case b_105: return "b_105";
+        case b_11: return "b_11";
+        case b_115: return "b_115";
+        case b_12: return "b_12";
+        default: return "Unknown Batt";
+    }
+}
+
+
 // Global instances of SystemSettings
 SystemSettings systemSettingsCurrent;
 SystemSettings systemSettingsPrevious;

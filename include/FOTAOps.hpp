@@ -31,6 +31,9 @@ public:
     void setPreviousFOTACode(FOTACode code);
     FOTACode getPreviousFOTACode() const;
 
+    void setTotalPackets(uint32_t total);
+    uint32_t getTotalPackets() const;
+
     void setPacketNum(int num);
     int getPacketNum() const;
     void incPacketNum();
@@ -49,6 +52,7 @@ private:
     FOTACode currentFOTACode;
     FOTACode previousFOTACode;
     int packetNum;
+    uint32_t totalPackets;
     bool fotaAllowed;
 };
 

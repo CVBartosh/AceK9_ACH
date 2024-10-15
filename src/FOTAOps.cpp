@@ -29,6 +29,14 @@ FOTACode FOTAOps::getPreviousFOTACode() const {
     return previousFOTACode;
 }
 
+void FOTAOps::setTotalPackets(uint32_t total){
+    totalPackets = total;
+}
+
+uint32_t FOTAOps::getTotalPackets() const {
+    return totalPackets;
+}
+    
 // Packet number methods
 void FOTAOps::setPacketNum(int num) {
     packetNum = num;
