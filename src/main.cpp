@@ -3,7 +3,7 @@
 #include <Wire.h>
 #include <functional>
 #include <lvgl.h>
-#include <Squareline/ui.h>
+#include <Squareline/ui.h> 
 #include <interface.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -406,7 +406,7 @@ void Init_Timers() {
     // MainLoop_Timer Initialization
     MainLoop_Timer.setName("MainLoop_Timer");
     MainLoop_Timer.setOverflowFlag(false);
-    MainLoop_Timer.setThreshold(1500); // 1.5s
+    MainLoop_Timer.setThreshold(10000); 
     MainLoop_Timer.setTimerEnable(true);
 }
 
@@ -518,7 +518,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         case COMMAND_ID::ACKNOWLEDGE: {
             acknowledge_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
-            MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
+            //MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
             last_packet.cmd = pck.cmd_ID;
             last_packet.status = pck.status;
 			last_packet.processed = false;
@@ -546,7 +546,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         }
         break;
 		case COMMAND_ID::UPDATE: {
-            MONITOR.println("Update Packet Received");
+            //MONITOR.println("Update Packet Received");
             update_packet pck;
 			//hex_dump(payload,payload_length,0);
 			pck.size = (payload[3]<<8)|payload[4];
@@ -555,9 +555,11 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 				pck.size = 1024;
 			}
 			if(pck.size>0) {
+            	memcpy(&pck.data,payload+5,pck.size);
+			}else{
 				MONITOR.printf("payload size: %d\n",(int)payload_length);
 				MONITOR.printf("Packet size: %d\n",(int)pck.size);
-            	memcpy(&pck.data,payload+5,pck.size);
+				MONITOR.println("End Update Packet Received (size == zero)");
 			}
 			
             last_packet.cmd = pck.cmd_ID;
@@ -569,7 +571,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         }
         break;  
 		case COMMAND_ID::FOTA: {
-			MONITOR.println("FOTA Packet Received");
+			//MONITOR.println("FOTA Packet Received");
             fota_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
             //MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
@@ -2151,6 +2153,41 @@ void on_monitor_check_fota(const char* str) {
     
 }
 
+void on_monitor_request_num_packets(const char* str) {
+    
+    last_packet.cmd = COMMAND_ID::FOTA;
+	last_packet.status = STATUS_CODE::FOTA_PACKET_COUNT;
+	last_packet.processed = true;
+	
+    fota_packet data;
+    memset(&data, 0, sizeof(data));
+	data.fotaStatus = STATUS_CODE::FOTA_PACKET_COUNT;    
+        
+    uint32_t crc = crc32(0,(unsigned char*)&data,sizeof(data));
+    
+    uint8_t* payload = (uint8_t*)malloc(sizeof(data)+5);
+    if(payload==nullptr) {
+        //MONITOR.println("Out of memory");
+        while(1);
+    }
+    payload[0]=(uint8_t)last_packet.cmd;
+    memcpy(payload+1,&crc,sizeof(uint32_t));
+    memcpy(payload+5,&data,sizeof(data));
+
+    status = sendUserDataRelayAPIFrame(&my_xbee,(const char*)payload, sizeof(data)+5); 
+    free(payload);
+
+    if (status < 0) 
+    {
+        //MONITOR.printf("Error %d sending fota packet\n", status);
+    }
+    else 
+    {
+        //MONITOR.println("fota packet sent");
+    }
+    
+}
+
 void on_monitor_fota_request_packet(uint32_t pkt_num) {
     
     last_packet.cmd = COMMAND_ID::FOTA;
@@ -2190,7 +2227,12 @@ void on_monitor_fota_request_packet(uint32_t pkt_num) {
 
 void on_monitor_fota_loop_begin(const char* str) {
     
-    fotaOps.setFOTACode(FOTACode::FOTA_Begin);    
+    fotaOps.setFOTACode(FOTACode::FOTA_Initiate);    
+}
+
+void on_monitor_cancel_fota(const char* str) {
+    
+    fotaOps.setFOTACode(FOTACode::FOTA_None);    
 }
 
 void on_monitor_delete_file(const char* str) {
@@ -2252,57 +2294,97 @@ void monitor_dev_tick(HardwareSerial& s) {
         String cmd = str;
         cmd.toLowerCase();
         cmd.trim();
+
+		// ======================= CLI XBEE COMMANDS =================================
+
         if(cmd.substring(0,2)=="at") {
             on_monitor_at(str.c_str());
+
         } else if(cmd=="init") {
             on_monitor_init(str.c_str());
+
         } else if(cmd=="connect") {
             on_monitor_connect(str.c_str());
+
         } else if(cmd=="data") {
             on_monitor_data(str.c_str());
+
         } else if(cmd=="status") {
             on_monitor_status(str.c_str());
+
         } else if(cmd=="log") {
             on_monitor_log(str.c_str());  
+
         } else if(cmd=="connection") {
             on_monitor_connection(str.c_str());
+
         } else if (cmd=="config"){
             on_monitor_config(str.c_str());
-        } else if (cmd=="check fota"){
-			on_monitor_check_fota(str.c_str());
-		} else if (cmd.substring(0,13) =="request fota "){
-			MONITOR.println("Requesting FOTA Packet: " + String(cmd.substring(13).toInt()));
-			on_monitor_fota_request_packet(cmd.substring(13).toInt());
-		} else if (cmd=="delete file"){
-			on_monitor_delete_file(str.c_str());
-		}else if (cmd=="subscribe config"){
+
+        } else if (cmd=="subscribe config"){
             on_monitor_subscribe_config(str.c_str()); 
+
         } else if (cmd=="subscribe command"){
             on_monitor_subscribe_command(str.c_str());
-        } else if (cmd=="save default settings"){
+
+        } else if (cmd=="init data packet"){
+            send_init_data_packet();
+
+        } else if (cmd=="init config packet"){
+            send_init_config_packet();
+
+        } else if (cmd=="init status packet"){
+            send_init_status_packet();
+
+        } 
+		
+		// ======================= CLI FOTA COMMANDS =================================
+		
+		else if (cmd=="check fota"){
+			on_monitor_check_fota(str.c_str());
+
+		} else if (cmd=="request num packets"){
+			on_monitor_request_num_packets(str.c_str());
+
+		} else if (cmd.substring(0,13) =="request fota "){
+			MONITOR.println("Requesting FOTA Packet: " + String(cmd.substring(12).toInt()));
+			on_monitor_fota_request_packet(cmd.substring(12).toInt());
+
+		} else if (cmd=="cancel fota"){
+			on_monitor_cancel_fota(str.c_str());
+
+		} else if (cmd=="delete file"){
+			on_monitor_delete_file(str.c_str());
+
+		} else if (cmd=="fota loop begin"){
+            on_monitor_fota_loop_begin(str.c_str());
+        }
+		
+		// ======================= CLI CONTROL HEAD COMMANDS =================================
+
+		else if (cmd=="save default settings"){
             systemSettingsCurrent = systemSettingsDefault;    
             save_settings();            
+			
         } else if (cmd=="save custom settings"){
             //systemSettingsCurrent.setAlarmPower(PowerOpt::p_ManONManOFF);
             save_settings();
+
         } else if (cmd=="report settings"){
             print_settings();
-        } else if (cmd=="init data packet"){
-            send_init_data_packet();
-        } else if (cmd=="init config packet"){
-            send_init_config_packet();
-        }else if (cmd=="init status packet"){
-            send_init_status_packet();
-        }else if (cmd=="fota loop begin"){
-            on_monitor_fota_loop_begin(str.c_str());
-        }else if (cmd=="alarm none"){
+
+        } else if (cmd=="alarm none"){
             on_monitor_alarm_none(str.c_str());
+
         } else if (cmd=="alarm prealarm"){
             on_monitor_alarm_prealarm(str.c_str());
+
         } else if (cmd=="alarm snooze"){
             on_monitor_alarm_snooze(str.c_str());
+
         } else if (cmd=="alarm fullalarm"){
             on_monitor_alarm_fullalarm(str.c_str());
+
         }
     }
 }
@@ -5277,13 +5359,11 @@ void FOTA_Loop(){
 			break;
 		
 		case FOTACode::FOTA_Downloading:
-
 			
-
 			// Initial Checks
 			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
-				
+				MONITOR.println("FOTA Downloading: Fix Total Packet Bug");
 				fotaOps.setPacketNum(0);
               	on_monitor_fota_request_packet(fotaOps.getPacketNum());
 
@@ -5308,7 +5388,7 @@ void FOTA_Loop(){
 					fotaOps.setFOTACode(FOTACode::FOTA_Success);
 					
 				}
-				else if (fotaOps.getPacketNum() >= fotaOps.getTotalPackets()){
+				else if (fotaOps.getPacketNum() < fotaOps.getTotalPackets()){
 
 					// TODO: ADD IN A TIMEOUT SECTION
 					MONITOR.printf("FOTA Downloading: Packet Overflow: Total Packets: #%d Received: #%d\n",fotaOps.getTotalPackets(),fotaOps.getPacketNum());
@@ -5318,7 +5398,9 @@ void FOTA_Loop(){
 				{
 					last_packet.cmd = (COMMAND_ID)NULL;
 					
-					MONITOR.printf("FOTA Downloading: Packet Received: #%d\n",fotaOps.getPacketNum());
+					MONITOR.printf("FOTA Pkt: #%d\n",fotaOps.getPacketNum());
+
+
 					// FOTA LOOPING CODE SECTION
 					if(ESP_OK!=esp_ota_write(ota_handle,update_data.data,(size_t)update_data.size)) {
 						MONITOR.println("Failed to open file for appending");
@@ -5328,6 +5410,7 @@ void FOTA_Loop(){
 					else{
 
 						fotaOps.incPacketNum();
+
 						on_monitor_fota_request_packet(fotaOps.getPacketNum());
 
 					}
@@ -5657,18 +5740,18 @@ void loop() {
 		MONITOR.println("================== LOOP A ====================");
 
 		// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
-		check_door_condition();
+		// check_door_condition();
 
 		// //MONITOR.printf("ui_update_ACECON\n");
-		ui_update_acecon();
+		// ui_update_acecon();
 		
 		// //================================================== State Machine Logic =========================================*/
 		
-		Process_System_Alarm_States();
+		// Process_System_Alarm_States();
 	
-		Process_State_Machine();
+		// Process_State_Machine();
 
-		ui_update_icons();
+		// ui_update_icons();
 
 		
 
