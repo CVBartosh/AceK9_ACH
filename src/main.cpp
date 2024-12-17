@@ -52,9 +52,10 @@ struct last_packet_info {
     STATUS_CODE status; // = STATUS_CODE::SUCCESS;
     COMMAND_ID cmd; // = (COMMAND_ID)0;
 	uint32_t value;
+	bool crc_OK;
 	bool processed;
 };
-static last_packet_info last_packet = {STATUS_CODE::SUCCESS,(COMMAND_ID)0,0,true};
+static last_packet_info last_packet = {STATUS_CODE::SUCCESS,(COMMAND_ID)0,0,false,true};
 
 struct last_at_info {
     char commandstr[2];
@@ -497,6 +498,59 @@ bool load_settings() {
 
 //================================================== XBee HAL Functions =========================================*/
 
+
+uint32_t crc32(uint32_t crc, unsigned char *buf, size_t len)
+{
+    int k;
+
+    crc = ~crc;
+    while (len--) {
+        crc ^= *buf++;
+        for (k = 0; k < 8; k++)
+            crc = crc & 1 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
+    }
+    return ~crc;
+}
+
+// Function to check CRC against received data
+bool check_crc32(uint32_t expected_crc, unsigned char *data, size_t len)
+{
+    uint32_t calculated_crc = crc32(0, data, len); // Calculate CRC for the data
+    
+    if (calculated_crc == expected_crc) {
+        printf("CRC Check Passed: Expected CRC = 0x%08X, Calculated CRC = 0x%08X\n", expected_crc, calculated_crc);
+        return true;
+    } else {
+        printf("CRC Check Failed: Expected CRC = 0x%08X, Calculated CRC = 0x%08X\n", expected_crc, calculated_crc);
+        return false;
+    }
+}
+
+// Function to check CRC within user_data_rx
+bool extract_and_check_crc(const uint8_t* payload, int payload_length) {
+    if (payload_length < 5) { // Ensure CRC field exists
+        MONITOR.println("Payload too small for CRC check.");
+        return false;
+    }
+
+    // Extract CRC (4 bytes) and Payload
+    uint32_t received_crc = *(uint32_t*)(payload + 1); // CRC starts after Command ID
+    const uint8_t* data_start = payload + 5;          // Actual payload starts after CRC
+    int data_length = payload_length - 5;             // Length of payload data
+
+    // Check CRC
+
+	if (check_crc32(received_crc, (unsigned char*)data_start, data_length)){
+		
+		last_packet.crc_OK = true;	
+
+	}else{
+		last_packet.crc_OK = false;	
+	}
+
+    return last_packet.crc_OK;
+}
+
 // function that handles received User Data frames
 int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR *context)
 {
@@ -515,6 +569,15 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
     }
     const uint8_t* payload = data->payload;
     int cmd = payload[0];
+
+
+	// Extract and Check CRC
+
+    if (!extract_and_check_crc(payload, payload_length)) {
+        MONITOR.printf("CRC Check Failed for Command ID: %d\n", cmd);
+        return 0; // Skip processing if CRC is invalid
+    }
+
     
     switch((COMMAND_ID)cmd) {
         case COMMAND_ID::ACKNOWLEDGE: {
@@ -606,6 +669,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 #endif
     return 0;
 }
+
 int dump_tx_status(xbee_dev_t *xbee, const void FAR *frame, uint16_t length, void FAR *context)
 {
     XBEE_UNUSED_PARAMETER(xbee);
@@ -653,19 +717,6 @@ int sendUserDataRelayAPIFrame(xbee_dev_t *xbee, const char *tx, const int num_tx
         return ret;  // The value is negative so it contains the error code.
     }
     return 0;
-}
-
-uint32_t crc32(uint32_t crc, unsigned char *buf, size_t len)
-{
-    int k;
-
-    crc = ~crc;
-    while (len--) {
-        crc ^= *buf++;
-        for (k = 0; k < 8; k++)
-            crc = crc & 1 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
-    }
-    return ~crc;
 }
 
 //================================================== ACECON Funcitons =========================================*/
