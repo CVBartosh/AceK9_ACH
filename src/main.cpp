@@ -70,6 +70,8 @@ static command_packet command_data;
 
 static update_packet update_data;
 
+static fota_packet fota_data;
+
 struct acecon {
     bool alm;
     bool hps;
@@ -518,7 +520,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         case COMMAND_ID::ACKNOWLEDGE: {
             acknowledge_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
-            //MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
+            MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
             last_packet.cmd = pck.cmd_ID;
             last_packet.status = pck.status;
 			last_packet.processed = false;
@@ -546,7 +548,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         }
         break;
 		case COMMAND_ID::UPDATE: {
-            //MONITOR.println("Update Packet Received");
+            MONITOR.println("Update Packet Received");
             update_packet pck;
 			//hex_dump(payload,payload_length,0);
 			pck.size = (payload[3]<<8)|payload[4];
@@ -571,12 +573,15 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         }
         break;  
 		case COMMAND_ID::FOTA: {
-			//MONITOR.println("FOTA Packet Received");
+			
             fota_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
-            //MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
+            MONITOR.printf("FOTA Packet - Value: %d - Status: %d\n",pck.pktValue, (int)pck.fotaStatus);
             last_packet.cmd = pck.cmd_ID;
-			last_packet.value = pck.pktValue;
+			
+			fota_data = pck;
+
+			MONITOR.printf("FOTA Data - Value: %d - Status: %d\n",fota_data.pktValue, (int)fota_data.fotaStatus);
 			MONITOR.printf("payload total packet: %d\n",(int)pck.pktValue);
 			last_packet.processed = false;
             last_received = true;
@@ -2168,7 +2173,7 @@ void on_monitor_request_num_packets(const char* str) {
     uint8_t* payload = (uint8_t*)malloc(sizeof(data)+5);
     if(payload==nullptr) {
         //MONITOR.println("Out of memory");
-        while(1);
+        while(1); // TODO: CHECK FOR POTENTIAL INFINITE LOOPS
     }
     payload[0]=(uint8_t)last_packet.cmd;
     memcpy(payload+1,&crc,sizeof(uint32_t));
@@ -2227,7 +2232,7 @@ void on_monitor_fota_request_packet(uint32_t pkt_num) {
 
 void on_monitor_fota_loop_begin(const char* str) {
     
-    fotaOps.setFOTACode(FOTACode::FOTA_Initiate);    
+    fotaOps.setFOTACode(FOTACode::FOTA_Begin);    
 }
 
 void on_monitor_cancel_fota(const char* str) {
@@ -5258,7 +5263,7 @@ bool Check_FOTA_FW()
 		if (last_packet.status == STATUS_CODE::SUCCESS)
 		{
 
-			// MONITOR.println("XBEE Cell Connected");
+			MONITOR.println("CHECK FOTA FW: num packets = " + String(last_packet.value));
 			fotaOps.setTotalPackets(last_packet.value);
 			last_packet.value = 0;
 			last_packet.cmd = (COMMAND_ID)NULL;
@@ -5725,7 +5730,9 @@ void loop() {
     if(((int)last_packet.status)<0) {
         on_xbee_error(last_packet.cmd, last_packet.status);
     }
-		
+			
+	
+
 	//MONITOR.printf("Calling AceCON Dev Tick\n");
     acecon_dev_tick();
 
