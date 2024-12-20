@@ -409,7 +409,7 @@ void Init_Timers() {
     // MainLoop_Timer Initialization
     MainLoop_Timer.setName("MainLoop_Timer");
     MainLoop_Timer.setOverflowFlag(false);
-    MainLoop_Timer.setThreshold(10000); 
+    MainLoop_Timer.setThreshold(5000); 
     MainLoop_Timer.setTimerEnable(true);
 }
 
@@ -518,10 +518,10 @@ bool check_crc32(uint32_t expected_crc, unsigned char *data, size_t len)
     uint32_t calculated_crc = crc32(0, data, len); // Calculate CRC for the data
     
     if (calculated_crc == expected_crc) {
-        printf("CRC Check Passed: Expected CRC = 0x%08X, Calculated CRC = 0x%08X\n", expected_crc, calculated_crc);
+        //printf("CRC Check Passed: Expected CRC = 0x%08X, Calculated CRC = 0x%08X\n", expected_crc, calculated_crc);
         return true;
     } else {
-        printf("CRC Check Failed: Expected CRC = 0x%08X, Calculated CRC = 0x%08X\n", expected_crc, calculated_crc);
+        //printf("CRC Check Failed: Expected CRC = 0x%08X, Calculated CRC = 0x%08X\n", expected_crc, calculated_crc);
         return false;
     }
 }
@@ -5308,20 +5308,15 @@ bool Check_FOTA_FW()
 {
 	last_packet.processed = true;
 
-	if (last_packet.cmd == COMMAND_ID::FOTA)
+	if (fotaOps.getTotalPackets() > 0)
 	{
+		MONITOR.println("CHECK FOTA FW: num packets = " + String(last_packet.value));
+		fotaOps.setTotalPackets(last_packet.value);
+		last_packet.value = 0;
+		last_packet.cmd = (COMMAND_ID)NULL;
+		last_packet.status = (STATUS_CODE)NULL;
 
-		if (last_packet.status == STATUS_CODE::SUCCESS)
-		{
-
-			MONITOR.println("CHECK FOTA FW: num packets = " + String(last_packet.value));
-			fotaOps.setTotalPackets(last_packet.value);
-			last_packet.value = 0;
-			last_packet.cmd = (COMMAND_ID)NULL;
-			last_packet.status = (STATUS_CODE)NULL;
-
-			return true;
-		}
+		return true;
 	}
 
 	return false;
@@ -5370,10 +5365,13 @@ void FOTA_Loop(){
 			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
 				MONITOR.println("FOTA Begin");
+
+				//Clear FOTA OPS total packets
+				fotaOps.setTotalPackets(0);
 				
 				// Check FW
 				String blank;
-				on_monitor_check_fota(blank.c_str());
+				on_monitor_request_num_packets(blank.c_str());
 				
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 			}
