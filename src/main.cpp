@@ -24,6 +24,9 @@
 #include "init_status_packet.h"
 #include <esp_ota_ops.h>
 
+#define DEBUG_VAR(var) MONITOR.println(String(#var) + ": " + String(var))
+#define DEBUG_EXPR(expr) MONITOR.println(String(#expr) + " = " + String(expr))
+
 //================================================== Temperature Variables =========================================
 #define TempErrorGeneral    'E'
 #define TempErrorOpen       '5'
@@ -270,7 +273,7 @@ String PreAlertText = "";
 String FullAlarmText = "";
 
 
-#define SingleTempOverrideAmount	1
+#define SingleTempOverrideAmount	10
 #define TempWarningOffset	5
 
 bool UpdatePreAlarmFlag = false;
@@ -497,7 +500,6 @@ bool load_settings() {
 }
 
 //================================================== XBee HAL Functions =========================================*/
-
 
 uint32_t crc32(uint32_t crc, unsigned char *buf, size_t len)
 {
@@ -2452,15 +2454,15 @@ float ConvertFtoC(float F)
 
 void ui_update_acecon() {
 
-	MONITOR.println("ui update acecon");
+	//MONITOR.println("ui update acecon");
 	data_global = vim_load();
 
     if (data_global.temp_changed || data_global.units_changed){
-        MONITOR.println("UI: Temp Values Need Updating");
+        // MONITOR.println("UI: Temp Values Need Updating");
         data_global.updateIcons = true;
 
         if(data_global.leftTemp_previous!=data_global.leftTemp_current || data_global.units_changed) {
-            ////MONITOR.println("UI: Updating Left Temp");
+            // MONITOR.println("UI: Updating Left Temp");
             static char szLeftTemp[6];
             if (systemSettingsCurrent.isAlarmUnitF()){
                 sprintf(szLeftTemp,"%3.1f",data_global.leftTemp_current);
@@ -2490,7 +2492,7 @@ void ui_update_acecon() {
         }
 				
         if (data_global.rightTemp_previous!=data_global.rightTemp_current || data_global.units_changed) {
-            ////MONITOR.println("UI: Updating Right Temp");
+            // MONITOR.println("UI: Updating Right Temp");
             static char szRightTemp[6];
             if (systemSettingsCurrent.isAlarmUnitF()){
                 sprintf(szRightTemp,"%3.1f",data_global.rightTemp_current);
@@ -2520,7 +2522,7 @@ void ui_update_acecon() {
         }
 
         if (systemSettingsCurrent.isTempAveragingEnabled()){
-            ////MONITOR.println("UI: Updating Avg Temp");
+            // MONITOR.println("UI: Updating Avg Temp");
             static char szAvgTemp[6];
 
             if (systemSettingsCurrent.isAlarmUnitF()){
@@ -2560,11 +2562,15 @@ void ui_update_acecon() {
 		// Check Temperature Values are within range
 		if (systemSettingsCurrent.isTempAveragingEnabled())
 		{
-			MONITOR.println("Temp Averaging Enabled");
+			// MONITOR.println("Temp Averaging Enabled");
 			// Sensor 1
 			if (data_global.leftTemp_current >= (HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()]) + SingleTempOverrideAmount)
 			{
 				MONITOR.println("Left Temp: Over");
+
+				// DEBUG_VAR(data_global.leftTemp_current);
+				// DEBUG_EXPR((HotTempOpt_F[systemSettingsCurrent.getAlarmHotSetIndex()]) + SingleTempOverrideAmount);
+
 
 				PreAlertText = "HOT ALERT";
 				FullAlarmText = "HOT  ALARM";
@@ -2761,9 +2767,10 @@ void ui_update_acecon() {
 			// If Average Temp Value is OVer or Under
 			if (data_global.avgTempState == tst_Over || data_global.avgTempState == tst_Under)
 			{
-				
+				DEBUG_VAR(data_global.avgTempState);
 				data_global.temp_alarmFlag_previous = data_global.temp_alarmFlag_current;
 				data_global.temp_alarmFlag_current = true;
+
 			}
 			// If either individual sensor is over the +10 threshold
 			else if (data_global.leftTempState == tst_OverPlus || data_global.rightTempState == tst_OverPlus)
@@ -2783,6 +2790,7 @@ void ui_update_acecon() {
 			if (data_global.leftTempState == tst_Over || data_global.leftTempState == tst_Under ||
 				data_global.rightTempState == tst_Over || data_global.rightTempState == tst_Under)
 			{
+				
 				data_global.temp_alarmFlag_previous = data_global.temp_alarmFlag_current;
 				data_global.temp_alarmFlag_current = true;
 			}
@@ -2800,6 +2808,8 @@ void ui_update_acecon() {
 		if (static_cast<int>(data_global.leftTemp_previous) != static_cast<int>(data_global.leftTemp_current) ||
 			static_cast<int>(data_global.rightTemp_previous) != static_cast<int>(data_global.rightTemp_current) ||
 			(systemSettingsCurrent.isTempAveragingEnabled() && static_cast<int>(data_global.avgTemp) != static_cast<int>(data_global.avgTemp)) ||
+			(!systemSettingsCurrent.isTempAveragingEnabled() && static_cast<int>(data_global.avgTemp) != static_cast<int>(data_global.avgTemp)) ||
+
 			data_global.temp_errorFlag_previous != data_global.temp_errorFlag_current ||
 			data_global.leftTempError_current != data_global.leftTempError_previous ||
 			data_global.rightTempError_current != data_global.rightTempError_previous)
@@ -2832,11 +2842,11 @@ void ui_update_acecon() {
 
         ////MONITOR.println("UI: Updating Ignition");
         if (data_global.ignitionOn_current) {
-            MONITOR.println("UI: Clearing Ignition State");
+            // MONITOR.println("UI: Clearing Ignition State");
             lv_obj_clear_state(ui_ImgButtonKey, LV_STATE_PRESSED); 
                       
         } else {
-        	MONITOR.println("UI: Adding Ignition State");
+        	// MONITOR.println("UI: Adding Ignition State");
             lv_obj_add_state(ui_ImgButtonKey, LV_STATE_PRESSED);
 
                        
@@ -2962,6 +2972,36 @@ void ui_update_acecon() {
 void ui_update_icons() {
 
 	data_global = vim_load();
+
+	if( aceconvalues_current.valueChanged == true) {
+        
+
+        if(aceconvalues_current.alm) {
+            lv_obj_add_state(ui_SwitchALM, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_SwitchALM, LV_STATE_CHECKED);
+        }
+
+		if(aceconvalues_current.ppt) {
+            lv_obj_add_state(ui_SwitchPPT, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_SwitchPPT, LV_STATE_CHECKED);
+        }
+
+		if(aceconvalues_current.hps) {
+            lv_obj_add_state(ui_SwitchHPS, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_SwitchHPS, LV_STATE_CHECKED);
+        }
+
+		if(aceconvalues_current.pps) {
+            lv_obj_add_state(ui_SwitchPPS, LV_STATE_CHECKED);
+            systemSettingsCurrent.setDoorDisabled(false);
+        } else {
+            lv_obj_clear_state(ui_SwitchPPS, LV_STATE_CHECKED);
+            systemSettingsCurrent.setDoorDisabled(true);
+        }
+    }
 
     if(data_global.updateIcons){
 
@@ -3800,7 +3840,7 @@ void process_vim(const char* incoming, void* state) {
 				data_global.k9_door_open_current = (line.charAt(ACEDATA_K9Door_POS)=='1');
 					
 				if (data_global.k9_door_open_previous != data_global.k9_door_open_current){
-					////MONITOR.println("Door Value Changed");
+					
 					data_global.k9_door_changed = true;
 					data_global.updateIcons = true;
 				}
@@ -3844,9 +3884,6 @@ void process_vim(const char* incoming, void* state) {
 					data_global.leftTempError_current= false;
 
 				}
-
-				// //MONITOR.print("Left Temp Value: ");
-				// //MONITOR.println(data_global.leftTemp);
 
 				//================================================== Right Temp =========================================*/
 				////MONITOR.printf("Right Temp Sign: %c\n",line.charAt(ACEDATA_Temp2_Sign_POS));
@@ -3907,11 +3944,9 @@ void process_vim(const char* incoming, void* state) {
 					}
 				}
 
-				////MONITOR.print("Average Temp Value: ");
-				////MONITOR.println(data_global.avgTemp);
-
-
+				
 				if (data_global.leftTemp_previous != data_global.leftTemp_current || data_global.rightTemp_previous != data_global.rightTemp_current){
+										
 					data_global.temp_changed = true;
 					data_global.updateIcons = true;
 				}
@@ -4101,10 +4136,22 @@ void acecon_dev_tick() {
     
 	
 	aceconvalues_current.ppt = digitalRead(ACECON_POP_IN);
+
+	if(aceconvalues_previous.ppt != aceconvalues_current.ppt) {
+        //MONITOR.printf("PPT Val Changed to  %s\r\n",aceconvalues_current.ppt?"HIGH":"LOW");
+        aceconvalues_current.valueChanged = true;
+	}
+
 	aceconvalues_current.alm = digitalRead( ACECON_ALM_OUT);
 
+	if(aceconvalues_previous.alm != aceconvalues_current.alm) {
+        //MONITOR.printf("ALM Val Changed to  %s\r\n",aceconvalues_current.alm?"HIGH":"LOW");
+        aceconvalues_current.valueChanged = true;
+    }
+
+
 	aceconvalues_current.pps = digitalRead(ACECON_PPS_IN);
-	//system is in gear
+
 	if (aceconvalues_current.pps == GEAR_INGEAR)
 	{
 
@@ -4139,9 +4186,7 @@ void acecon_dev_tick() {
 		data_global.inGear = GEAR_PARKED;
 
 	}
-	
-	
-	
+			
 	aceconvalues_current.ign = digitalRead(ACECON_IGN_IN);
 	// Rising Edge Detected
 	if (aceconvalues_previous.ign == false && aceconvalues_current.ign == true)
@@ -4162,28 +4207,11 @@ void acecon_dev_tick() {
 		
 	}
 	
-
-    if(aceconvalues_previous.ppt != aceconvalues_current.ppt) {
-        //MONITOR.printf("PPT Val Changed to  %s\r\n",aceconvalues_current.ppt?"HIGH":"LOW");
-        aceconvalues_current.valueChanged = true;
-
-        if(aceconvalues_current.ppt) {
-            lv_obj_add_state(ui_SwitchPPT, LV_STATE_CHECKED);
-        } else {
-            lv_obj_clear_state(ui_SwitchPPT, LV_STATE_CHECKED);
-        }
-    }
+    
     if(aceconvalues_previous.pps != aceconvalues_current.pps) {
         //MONITOR.printf("PPS Val Changed to  %s\r\n",aceconvalues_current.pps?"HIGH":"LOW");
         aceconvalues_current.valueChanged = true;
 
-        if(aceconvalues_current.pps) {
-            lv_obj_add_state(ui_SwitchPPS, LV_STATE_CHECKED);
-            systemSettingsCurrent.setDoorDisabled(false);
-        } else {
-            lv_obj_clear_state(ui_SwitchPPS, LV_STATE_CHECKED);
-            systemSettingsCurrent.setDoorDisabled(true);
-        }
     }
     if(aceconvalues_previous.ign != aceconvalues_current.ign) {
         data_global.ignitionOn_previous = data_global.ignitionOn_current;
@@ -4197,21 +4225,7 @@ void acecon_dev_tick() {
         //MONITOR.printf("HPS Val Changed to  %s\r\n",aceconvalues_current.hps?"HIGH":"LOW");
         aceconvalues_current.valueChanged = true;
 
-        if(aceconvalues_current.hps) {
-            lv_obj_add_state(ui_SwitchHPS, LV_STATE_CHECKED);
-        } else {
-            lv_obj_clear_state(ui_SwitchHPS, LV_STATE_CHECKED);
-        }
-    }
-    if(aceconvalues_previous.alm != aceconvalues_current.alm) {
-        //MONITOR.printf("ALM Val Changed to  %s\r\n",aceconvalues_current.alm?"HIGH":"LOW");
-        aceconvalues_current.valueChanged = true;
-
-        if(aceconvalues_current.alm) {
-            lv_obj_add_state(ui_SwitchALM, LV_STATE_CHECKED);
-        } else {
-            lv_obj_clear_state(ui_SwitchALM, LV_STATE_CHECKED);
-        }
+        
     }
 
 
@@ -5789,25 +5803,27 @@ void loop() {
 
 	vTaskDelay(5);
 
+	//MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
+	check_door_condition();
+
+	//MONITOR.printf("ui_update_ACECON\n");
+	ui_update_acecon();
+	
+	//================================================== State Machine Logic =========================================*/
+	
+	Process_System_Alarm_States();
+
+	Process_State_Machine();
+
+	ui_update_icons();
+
 	if (MainLoop_Timer.checkOverflow()){
 
 		MainLoop_Timer.startTimer();
 
 		MONITOR.println("================== LOOP A ====================");
 
-		// //MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
-		// check_door_condition();
-
-		// //MONITOR.printf("ui_update_ACECON\n");
-		// ui_update_acecon();
 		
-		// //================================================== State Machine Logic =========================================*/
-		
-		// Process_System_Alarm_States();
-	
-		// Process_State_Machine();
-
-		// ui_update_icons();
 
 		
 

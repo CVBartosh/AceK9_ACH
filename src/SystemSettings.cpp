@@ -83,11 +83,11 @@ void SystemSettings::setAlarmHotSetIndex(int index) {
 }
 
 void SystemSettings::incAlarmHotSetIndex(){
-    setAlarmHotSetIndex(alarmHotSetIndex++);
+   setAlarmHotSetIndex(getAlarmHotSetIndex() + 1);
 }
 
 void SystemSettings::decAlarmHotSetIndex(){
-    setAlarmHotSetIndex(alarmHotSetIndex--);
+    setAlarmHotSetIndex(getAlarmHotSetIndex() - 1);
 }
 
 int SystemSettings::getAlarmHotSetIndex() const {
