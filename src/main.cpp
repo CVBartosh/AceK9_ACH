@@ -578,14 +578,16 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
     if (!extract_and_check_crc(payload, payload_length)) {
         MONITOR.printf("CRC Check Failed for Command ID: %d\n", cmd);
         return 0; // Skip processing if CRC is invalid
-    }
+    }else{
+		//MONITOR.printf("CRC Check Passed for Command ID: %d\n", cmd);
+	}
 
     
     switch((COMMAND_ID)cmd) {
         case COMMAND_ID::ACKNOWLEDGE: {
             acknowledge_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
-            MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
+            //MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
             last_packet.cmd = pck.cmd_ID;
             last_packet.status = pck.status;
 			last_packet.processed = false;
@@ -613,20 +615,15 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         }
         break;
 		case COMMAND_ID::UPDATE: {
-            MONITOR.println("Update Packet Received");
+            //MONITOR.println("Update Packet Received");
             update_packet pck;
-			//hex_dump(payload,payload_length,0);
-			pck.size = (payload[3]<<8)|payload[4];
-			if(pck.size>1024) {
+			memcpy(&pck,payload+5,payload_length-5);
+			
+			//MONITOR.printf("Packet size: %d\n",(int)pck.size);
+
+			if(pck.size>256) {
 				MONITOR.println("Update packet size overflow");
-				pck.size = 1024;
-			}
-			if(pck.size>0) {
-            	memcpy(&pck.data,payload+5,pck.size);
-			}else{
-				MONITOR.printf("payload size: %d\n",(int)payload_length);
-				MONITOR.printf("Packet size: %d\n",(int)pck.size);
-				MONITOR.println("End Update Packet Received (size == zero)");
+				pck.size = 256;
 			}
 			
             last_packet.cmd = pck.cmd_ID;
@@ -641,13 +638,18 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 			
             fota_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
-            MONITOR.printf("FOTA Packet - Value: %d - Status: %d\n",pck.pktValue, (int)pck.fotaStatus);
+            //MONITOR.printf("FOTA Packet - Value: %d - Status: %d\n",pck.pktValue, (int)pck.fotaStatus);
             last_packet.cmd = pck.cmd_ID;
 			
 			fota_data = pck;
 
-			MONITOR.printf("FOTA Data - Value: %d - Status: %d\n",fota_data.pktValue, (int)fota_data.fotaStatus);
-			MONITOR.printf("payload total packet: %d\n",(int)pck.pktValue);
+			fotaOps.setTotalPackets(fota_data.pktValue);
+
+			//MONITOR.printf("FOTA Data - Value: %d - Status: %d\n",fota_data.pktValue, (int)fota_data.fotaStatus);
+			//MONITOR.printf("payload total packet: %d\n",(int)pck.pktValue);
+
+
+
 			last_packet.processed = false;
             last_received = true;
         }
@@ -5324,8 +5326,7 @@ bool Check_FOTA_FW()
 
 	if (fotaOps.getTotalPackets() > 0)
 	{
-		MONITOR.println("CHECK FOTA FW: num packets = " + String(last_packet.value));
-		fotaOps.setTotalPackets(last_packet.value);
+		MONITOR.println("CHECK FOTA FW: num packets = " + String(fotaOps.getTotalPackets()));
 		last_packet.value = 0;
 		last_packet.cmd = (COMMAND_ID)NULL;
 		last_packet.status = (STATUS_CODE)NULL;
@@ -5449,17 +5450,18 @@ void FOTA_Loop(){
 						
 						MONITOR.println("FOTA Downloading: FOTA Unsuccessful");
 
-						fotaOps.setFOTACode(FOTACode::FOTA_Fail);
+						
 
 					}
 					
 					fotaOps.setFOTACode(FOTACode::FOTA_Success);
 					
 				}
-				else if (fotaOps.getPacketNum() < fotaOps.getTotalPackets()){
+				else if (fotaOps.getPacketNum() > fotaOps.getTotalPackets()){
 
-					// TODO: ADD IN A TIMEOUT SECTION
+					
 					MONITOR.printf("FOTA Downloading: Packet Overflow: Total Packets: #%d Received: #%d\n",fotaOps.getTotalPackets(),fotaOps.getPacketNum());
+					fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 
 				}
 				else if (last_packet.cmd == COMMAND_ID::UPDATE)
