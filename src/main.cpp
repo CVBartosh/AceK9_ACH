@@ -523,7 +523,7 @@ bool check_crc32(uint32_t expected_crc, unsigned char *data, size_t len)
         //printf("CRC Check Passed: Expected CRC = 0x%08X, Calculated CRC = 0x%08X\n", expected_crc, calculated_crc);
         return true;
     } else {
-        //printf("CRC Check Failed: Expected CRC = 0x%08X, Calculated CRC = 0x%08X\n", expected_crc, calculated_crc);
+        printf("CRC Check Failed: Expected CRC = 0x%08X, Calculated CRC = 0x%08X\n", expected_crc, calculated_crc);
         return false;
     }
 }
@@ -587,7 +587,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         case COMMAND_ID::ACKNOWLEDGE: {
             acknowledge_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
-            //MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
+            MONITOR.printf("Acknowledge Packet Received: %d\n",pck.status);
             last_packet.cmd = pck.cmd_ID;
             last_packet.status = pck.status;
 			last_packet.processed = false;
@@ -638,15 +638,15 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 			
             fota_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
-            //MONITOR.printf("FOTA Packet - Value: %d - Status: %d\n",pck.pktValue, (int)pck.fotaStatus);
+            MONITOR.printf("FOTA Packet - Value: %d - Status: %d\n",pck.pktValue, (int)pck.fotaStatus);
             last_packet.cmd = pck.cmd_ID;
 			
 			fota_data = pck;
 
 			fotaOps.setTotalPackets(fota_data.pktValue);
 
-			//MONITOR.printf("FOTA Data - Value: %d - Status: %d\n",fota_data.pktValue, (int)fota_data.fotaStatus);
-			//MONITOR.printf("payload total packet: %d\n",(int)pck.pktValue);
+			MONITOR.printf("FOTA Data - Value: %d - Status: %d\n",fota_data.pktValue, (int)fota_data.fotaStatus);
+			MONITOR.printf("payload total packet: %d\n",(int)pck.pktValue);
 
 
 
@@ -658,18 +658,18 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 #ifdef DUMP_PACKETS
     // If all characters of message are printable, just print it as a string
     // with printf().  Otherwise use hex_dump() for non-printable messages.
-    // int printable = TRUE;
-    // for (size_t i = 0; printable && i < payload_length; ++i) {
-    //     if (!isprint(data->payload[i])) {
-    //         printable = FALSE;
-    //     }
-    // }
+    int printable = TRUE;
+    for (size_t i = 0; printable && i < payload_length; ++i) {
+        if (!isprint(data->payload[i])) {
+            printable = FALSE;
+        }
+    }
 
-    // if (printable) {
-        //MONITOR.printf("%.*s\n\n", payload_length, data->payload);
-    // } else {
-        //hex_dump(data->payload, payload_length, HEX_DUMP_FLAG_OFFSET);
-    // }
+    if (printable) {
+        MONITOR.printf("%.*s\n\n", payload_length, data->payload);
+    } else {
+        hex_dump(data->payload, payload_length, HEX_DUMP_FLAG_OFFSET);
+    }
 #endif
     return 0;
 }
@@ -5777,7 +5777,7 @@ void loop() {
     }
 	
 
-    check_cell_signal();
+    // check_cell_signal();
 
 	//MONITOR.printf("Display Update\n");
     display_update();
