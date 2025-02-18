@@ -615,7 +615,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         }
         break;
 		case COMMAND_ID::UPDATE: {
-            //MONITOR.println("Update Packet Received");
+            MONITOR.println("Update Packet Received");
             update_packet pck;
 			memcpy(&pck,payload+5,payload_length-5);
 			
@@ -623,7 +623,18 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 
 			if(pck.size>256) {
 				MONITOR.println("Update packet size overflow");
-				pck.size = 256;
+				MONITOR.printf("Packet size: %d\n",(int)pck.size);
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
+				fotaOps.setFOTACode(FOTACode::FOTA_Fail);
+				
+			}
+
+			if(pck.size<256 && fotaOps.getPacketNum() < fotaOps.getTotalPackets()) {
+				MONITOR.println("Update packet size too small");
+				MONITOR.printf("Packet size: %d\n",(int)pck.size);
+				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
+				fotaOps.setFOTACode(FOTACode::FOTA_Fail);
+				
 			}
 			
             last_packet.cmd = pck.cmd_ID;
@@ -5316,7 +5327,7 @@ bool Check_ACK()
 			return true;
 		}
 	}
-	MONITOR.println("Check ACK Returned False");
+	//MONITOR.println("Check ACK Returned False");
 	return false;
 }
 
@@ -5440,7 +5451,7 @@ void FOTA_Loop(){
 			}
 			else
 			{
-				
+
 				if (Check_FOTA_DOWNLOAD_DONE())
 				{
 					// Move on to CheckFW
@@ -5464,7 +5475,7 @@ void FOTA_Loop(){
 					fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 
 				}
-				else if (last_packet.cmd == COMMAND_ID::UPDATE)
+				else if (Check_ACK())
 				{
 					last_packet.cmd = (COMMAND_ID)NULL;
 					
