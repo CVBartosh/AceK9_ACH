@@ -30,7 +30,7 @@ FOTACode FOTAOps::getPreviousFOTACode() const {
 }
 
 void FOTAOps::setTotalPackets(uint32_t total){
-    totalPackets = total;
+    totalPackets = total; //TODO: ASK ALEX TO FIX HIS COUNT
 }
 
 uint32_t FOTAOps::getTotalPackets() const {

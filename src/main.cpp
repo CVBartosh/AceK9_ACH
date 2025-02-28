@@ -216,6 +216,11 @@ vim_data data_global;
 //================================================== FOTA Stuff =========================================
 #include "FOTAOps.hpp"
 
+#define CYCLE_FOTA
+int FOTA_Cycle_Amount = 3;
+int FOTA_Cycle_Count = 0;
+
+
 //================================================== State Machine Stuff =========================================
 #include "StateMachine.hpp"
 StateMachine stateMachine;
@@ -566,7 +571,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
     //MONITOR.printf("Message from %s interface:\n",xbee_user_data_interface(data->source));
 
     if(payload_length<1) {
-        //MONITOR.println("No frame payload received");
+        MONITOR.println("No frame payload received");
         return 0;
     }
     const uint8_t* payload = data->payload;
@@ -615,23 +620,23 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         }
         break;
 		case COMMAND_ID::UPDATE: {
-            MONITOR.println("Update Packet Received");
+            //MONITOR.println("Update Packet Received");
             update_packet pck;
 			memcpy(&pck,payload+5,payload_length-5);
 			
 			//MONITOR.printf("Packet size: %d\n",(int)pck.size);
 
-			if(pck.size>256) {
+			if(pck.size>128) {
 				MONITOR.println("Update packet size overflow");
-				MONITOR.printf("Packet size: %d\n",(int)pck.size);
+				MONITOR.printf("Update Packet size: %d\n",(int)pck.size);
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 				fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 				
 			}
 
-			if(pck.size<256 && fotaOps.getPacketNum() < fotaOps.getTotalPackets()) {
+			if(pck.size<128 && fotaOps.getPacketNum()+1 < fotaOps.getTotalPackets()) {
 				MONITOR.println("Update packet size too small");
-				MONITOR.printf("Packet size: %d\n",(int)pck.size);
+				MONITOR.printf("Update Packet size: %d\n",(int)pck.size);
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 				fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 				
@@ -5400,6 +5405,13 @@ void FOTA_Loop(){
 				on_monitor_request_num_packets(blank.c_str());
 				
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
+
+				#ifdef CYCLE_FOTA
+
+					FOTA_Cycle_Count++;
+
+				#endif
+
 			}
 			else
 			{
@@ -5479,7 +5491,7 @@ void FOTA_Loop(){
 				{
 					last_packet.cmd = (COMMAND_ID)NULL;
 					
-					MONITOR.printf("FOTA Pkt: #%d\n",fotaOps.getPacketNum());
+					MONITOR.printf("FOTA Pkt: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets());
 
 
 					// FOTA LOOPING CODE SECTION
@@ -5491,6 +5503,11 @@ void FOTA_Loop(){
 					else{
 
 						fotaOps.incPacketNum();
+						
+
+						//MONITOR.println("ADDING 1000 ms DELAY");
+						//delay(1000);
+						MONITOR.printf("Requesting packet Number: %i\n",fotaOps.getPacketNum());
 
 						on_monitor_fota_request_packet(fotaOps.getPacketNum());
 
@@ -5532,11 +5549,34 @@ void FOTA_Loop(){
 			}
 			else
 			{
+
+				#ifdef CYCLE_FOTA
+
+				MONITOR.println("FOTA Success: Validate File: true");
+				MONITOR.printf("FOTA Cycle Count: %d/%d\n",FOTA_Cycle_Count,FOTA_Cycle_Amount);
+				
+				if (FOTA_Cycle_Count <= FOTA_Cycle_Amount){
+					MONITOR.println("FOTA Cycle Test Continue...");
+					fotaOps.setFOTACode(FOTACode::FOTA_Begin);
+				}
+				else{
+					MONITOR.println("FOTA Cycle Test Completed");
+					fotaOps.setFOTACode(FOTACode::FOTA_Done);
+				}
+
+				
+				#else
+
 				MONITOR.println("FOTA Success: Validate File: true");
 				MONITOR.println("FOTA Done:: Reseting ESP");
 				ESP.restart(); // reset the Arduino via software function
 
 				fotaOps.setFOTACode(FOTACode::FOTA_Done);
+
+				#endif
+
+
+				
 				
 			}
 
