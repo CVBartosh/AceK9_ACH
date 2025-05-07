@@ -13,6 +13,7 @@
 #include <stddef.h>
 
 enum struct STATUS_CODE : int32_t {
+    MQTT_FAIL = -8,
     FOTA_GENERAL_EXCEPTION = -7,
     FOTA_FW_ABSENT = -6,
     ACEK9_STATUS_BAD_TOPIC_HANDLER = -5,

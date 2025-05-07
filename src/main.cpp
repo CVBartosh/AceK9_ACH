@@ -91,6 +91,7 @@ acecon aceconvalues_previous = {false,false,false,false,false,false};
 
 int COM_Retry_Attempts = 0;
 #define COM_Retry_Threshold 3
+#define COM_SPEED (115200*8)
 
 #include "SystemSettings.hpp"
 
@@ -216,9 +217,12 @@ vim_data data_global;
 //================================================== FOTA Stuff =========================================
 #include "FOTAOps.hpp"
 
-#define CYCLE_FOTA
+//#define CYCLE_FOTA
 int FOTA_Cycle_Amount = 3;
 int FOTA_Cycle_Count = 0;
+#define FOTA_PKT_SIZE 256
+static uint8_t OTA_Buffer[8192];
+int OTA_BUFFER_Index;
 
 
 //================================================== State Machine Stuff =========================================
@@ -600,12 +604,13 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         }
         break;
         case COMMAND_ID::COMMAND: {
-            //MONITOR.println("Command Packet Received");
+            
             command_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
             last_packet.cmd = pck.cmd_ID;
             command_data = pck;
             last_received = true;
+			MONITOR.printf("Command Packet Received: %s\n",pck.command);
         }
         break;
         case COMMAND_ID::CONFIG: {
@@ -626,7 +631,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 			
 			//MONITOR.printf("Packet size: %d\n",(int)pck.size);
 
-			if(pck.size>128) {
+			if(pck.size>FOTA_PKT_SIZE) {
 				MONITOR.println("Update packet size overflow");
 				MONITOR.printf("Update Packet size: %d\n",(int)pck.size);
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
@@ -634,8 +639,8 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 				
 			}
 
-			if(pck.size<128 && fotaOps.getPacketNum()+1 < fotaOps.getTotalPackets()) {
-				MONITOR.println("Update packet size too small");
+			if(pck.size<FOTA_PKT_SIZE && fotaOps.getPacketNum() != fotaOps.getTotalPackets()-1) {
+				MONITOR.printf("Update packet #%i/%i size too small\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets()-1);
 				MONITOR.printf("Update Packet size: %d\n",(int)pck.size);
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
 				fotaOps.setFOTACode(FOTACode::FOTA_Fail);
@@ -5319,12 +5324,35 @@ bool Check_ACK()
 
 	if (last_packet.cmd == COMMAND_ID::ACKNOWLEDGE)
 	{
-		MONITOR.println("Check ACK Received");
+		
 		
 		if (last_packet.status == STATUS_CODE::SUCCESS)
 		{
+			//MONITOR.println("Check ACK Received");
+			//MONITOR.println("Check ACK Returned True");
 
-			 MONITOR.println("Check ACK Returned True");
+			last_packet.cmd = (COMMAND_ID)NULL;
+			last_packet.status = (STATUS_CODE)NULL;
+
+			return true;
+		}
+	}
+	//MONITOR.println("Check ACK Returned False");
+	return false;
+}
+
+bool Check_FOTA_NACK()
+{
+	last_packet.processed = true;
+
+	if (last_packet.cmd == COMMAND_ID::ACKNOWLEDGE)
+	{
+		
+		
+		if (last_packet.status == STATUS_CODE::FOTA_GENERAL_EXCEPTION)
+		{
+			//MONITOR.println("Check NACK Received");
+			MONITOR.println("Check NACK Returned True");
 
 			last_packet.cmd = (COMMAND_ID)NULL;
 			last_packet.status = (STATUS_CODE)NULL;
@@ -5357,14 +5385,14 @@ bool Check_FOTA_DOWNLOAD_DONE()
 {
 	last_packet.processed = true;
 
-	if (last_packet.cmd == COMMAND_ID::UPDATE && update_data.size == 0)
+	if (fotaOps.getPacketNum() == fotaOps.getTotalPackets()-1)
 	{
-		// MONITOR.println("XBEE Cell Connected");
+		MONITOR.printf("Received All FOTA Packets: #%i/%i\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets());
 
-			last_packet.cmd = (COMMAND_ID)NULL;
-			last_packet.status = (STATUS_CODE)NULL;
+		last_packet.cmd = (COMMAND_ID)NULL;
+		last_packet.status = (STATUS_CODE)NULL;
 
-			return true;
+		return true;
 	}
 
 	return false;
@@ -5455,8 +5483,17 @@ void FOTA_Loop(){
 			// Initial Checks
 			if (fotaOps.getPreviousFOTACode() != fotaOps.getFOTACode())
 			{
-				MONITOR.println("FOTA Downloading: Fix Total Packet Bug");
-				fotaOps.setPacketNum(0);
+				MONITOR.println("FOTA Downloading");
+				
+				if (fotaOps.getPreviousFOTACode() == FOTACode::FOTA_Fail){
+
+					MONITOR.printf("Retry FOTA Pkt: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets()-1);
+
+				}else{
+					fotaOps.setPacketNum(0);
+				}
+				
+				
               	on_monitor_fota_request_packet(fotaOps.getPacketNum());
 
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
@@ -5464,26 +5501,28 @@ void FOTA_Loop(){
 			else
 			{
 
-				if (Check_FOTA_DOWNLOAD_DONE())
+				if (Check_FOTA_NACK())
 				{
-					// Move on to CheckFW
-					MONITOR.println("FOTA Downloading: File Downloaded: true");
+					last_packet.cmd = (COMMAND_ID)NULL;
 					
-					if(ESP_OK!=esp_ota_set_boot_partition(esp_ota_get_next_update_partition(NULL))) {
-						
-						MONITOR.println("FOTA Downloading: FOTA Unsuccessful");
+					MONITOR.printf("FOTA Pkt Received NACK: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets()-1);
 
-						
+					fotaOps.setPreviousFOTACode(FOTACode::FOTA_Fail);
+					fotaOps.setFOTACode(FOTACode::FOTA_Downloading);
+					
+					xbee_initialized = false;
+					xbee_cell_connected = false;
 
-					}
-					
-					fotaOps.setFOTACode(FOTACode::FOTA_Success);
-					
+					MONITOR.println("Reseting XBee");
+					digitalWrite(XBEE_RESET,HIGH);
+					delayMicroseconds(250);
+					digitalWrite(XBEE_RESET,LOW);
+
 				}
-				else if (fotaOps.getPacketNum() > fotaOps.getTotalPackets()){
+				else if (fotaOps.getPacketNum() > fotaOps.getTotalPackets()-1){
 
 					
-					MONITOR.printf("FOTA Downloading: Packet Overflow: Total Packets: #%d Received: #%d\n",fotaOps.getTotalPackets(),fotaOps.getPacketNum());
+					MONITOR.printf("FOTA Downloading: Packet Overflow: Total Packets: #%d Received: #%d\n",fotaOps.getTotalPackets(),fotaOps.getPacketNum()+1);
 					fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 
 				}
@@ -5491,27 +5530,39 @@ void FOTA_Loop(){
 				{
 					last_packet.cmd = (COMMAND_ID)NULL;
 					
-					MONITOR.printf("FOTA Pkt: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets());
+					MONITOR.printf("Writing FOTA Pkt: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets()-1);
 
-
-					// FOTA LOOPING CODE SECTION
 					if(ESP_OK!=esp_ota_write(ota_handle,update_data.data,(size_t)update_data.size)) {
 						MONITOR.println("Failed to open file for appending");
 						
 						fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 					}
 					else{
-
-						fotaOps.incPacketNum();
 						
-
-						//MONITOR.println("ADDING 1000 ms DELAY");
-						//delay(1000);
-						MONITOR.printf("Requesting packet Number: %i\n",fotaOps.getPacketNum());
-
-						on_monitor_fota_request_packet(fotaOps.getPacketNum());
-
+						if (fotaOps.getPacketNum() < fotaOps.getTotalPackets()-1){
+							fotaOps.incPacketNum();
+							
+							MONITOR.printf("Requesting packet Number: %i\n",fotaOps.getPacketNum());
+	
+							on_monitor_fota_request_packet(fotaOps.getPacketNum());
+	
+						}
+						
 					}
+					
+				}
+				else if (Check_FOTA_DOWNLOAD_DONE())
+				{
+					// Move on to CheckFW
+					MONITOR.println("FOTA Downloading: File Downloaded: true");
+					
+					if(ESP_OK!=esp_ota_set_boot_partition(esp_ota_get_next_update_partition(NULL))) {
+						
+						MONITOR.println("FOTA Downloading: FOTA Unable to Set Boot Partition");
+						fotaOps.setFOTACode(FOTACode::FOTA_Fail);
+					}
+					
+					fotaOps.setFOTACode(FOTACode::FOTA_Success);
 					
 				}
 
@@ -5646,7 +5697,7 @@ void FOTA_Loop(){
 }
 
 void setup() {
-	MONITOR.begin(115200);
+	MONITOR.begin(COM_SPEED);
 	SPIFFS.begin(true);
     Wire.begin( 1,42,100*1000); 
     lv_init();
@@ -5693,14 +5744,14 @@ void setup() {
 
     //================================================== XBEE Setup =========================================*/
 #ifndef CUSTOM
-    XBEE.begin(115200, SERIAL_8N1, 18, 17);
+    XBEE.begin(COM_SPEED, SERIAL_8N1, 18, 17);
 #else
-    XBEE.begin(115200, SERIAL_8N1, XBEE_RXD, XBEE_TXD);
+    XBEE.begin(COM_SPEED, SERIAL_8N1, XBEE_RXD, XBEE_TXD);
 #endif
-    //MONITOR.begin(115200);
+    //MONITOR.begin(COM_SPEED);
     //MONITOR.printf("Booted\n");
     XBEE_SERPORT.ser = &XBEE;
-    XBEE_SERPORT.baudrate = 115200;
+    XBEE_SERPORT.baudrate = COM_SPEED;
     strcpy(XBEE_SERPORT.portname,"XBEE");
 #ifndef CUSTOM
     XBEE_SERPORT.pin_rx = 18;
@@ -5839,7 +5890,10 @@ void loop() {
     monitor_dev_tick(MONITOR);
 
 	// FOTA Code Loop
-	FOTA_Loop();
+	if (xbee_initialized && xbee_cell_connected){
+		FOTA_Loop();
+	}
+	
 
     xbee_dev_tick(&my_xbee);
 
