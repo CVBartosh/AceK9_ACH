@@ -614,7 +614,7 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
         }
         break;
         case COMMAND_ID::CONFIG: {
-            //MONITOR.println("Config Packet Received");
+            MONITOR.println("Config Packet Received");
             config_packet pck;
             memcpy(&pck,payload+5,payload_length-5);
             
@@ -639,13 +639,13 @@ int user_data_rx(xbee_dev_t *xbee, const void FAR *raw,uint16_t length, void FAR
 				
 			}
 
-			if(pck.size<FOTA_PKT_SIZE && fotaOps.getPacketNum() != fotaOps.getTotalPackets()-1) {
-				MONITOR.printf("Update packet #%i/%i size too small\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets()-1);
-				MONITOR.printf("Update Packet size: %d\n",(int)pck.size);
-				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
-				fotaOps.setFOTACode(FOTACode::FOTA_Fail);
+			// if(pck.size<FOTA_PKT_SIZE && fotaOps.getPacketNum() != fotaOps.getTotalPackets()-1) {
+			// 	MONITOR.printf("Update packet #%i/%i size too small\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets()-1);
+			// 	MONITOR.printf("Update Packet size: %d\n",(int)pck.size);
+			// 	fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
+			// 	fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 				
-			}
+			// }
 			
             last_packet.cmd = pck.cmd_ID;
 			last_packet.processed = false;
@@ -1753,14 +1753,14 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
     uint8_t status;
     const uint8_t FAR *p;
 
-    //MONITOR.printf("\nResponse for: %s\n", response->command.str);
+    MONITOR.printf("\nResponse for: %s\n", response->command.str);
     
     last_at_cmd.commandstr[0] = response->command.str[0];
     last_at_cmd.commandstr[1] = response->command.str[1];
 
     if (response->flags & XBEE_CMD_RESP_FLAG_TIMEOUT)
     {
-        //MONITOR.println("(timed out)");
+        MONITOR.println("(timed out)");
         return XBEE_ATCMD_DONE;
     }
 
@@ -1779,7 +1779,7 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
     length = response->value_length;
     if (!length) // command sent successfully, no value to report
     {
-        //MONITOR.println("(success)");
+        MONITOR.println("(success)");
         return XBEE_ATCMD_DONE;
     }
     if (length <= 4)
@@ -1800,12 +1800,12 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
 
     if (printable)
     {
-        //MONITOR.printf("= \"%.*" PRIsFAR "\" ", length, response->value_bytes);
+        MONITOR.printf("= \"%.*" PRIsFAR "\" ", length, response->value_bytes);
     }
     if (length <= 4)
     {
         // format hex string with (2 * number of bytes in value) leading zeros
-        //MONITOR.printf("= 0x%0*" PRIX32 " (%" PRIu32 ")\n", length * 2, response->value, response->value);
+        MONITOR.printf("= 0x%0*" PRIX32 " (%" PRIu32 ")\n", length * 2, response->value, response->value);
 
         
 
@@ -1813,17 +1813,17 @@ int on_xbee_at_cmd(const xbee_cmd_response_t FAR *response)
     else if (length <= 32)
     {
         // format hex string
-        //MONITOR.printf("= 0x");
+        MONITOR.printf("= 0x");
         for (i = length, p = response->value_bytes; i; ++p, --i)
         {
-            //MONITOR.printf("%02X", *p);
+            MONITOR.printf("%02X", *p);
         }
-        //MONITOR.println("");
+        MONITOR.println("");
     }
     else
     {
 
-        //MONITOR.printf("= %d bytes:\n", length);
+        MONITOR.printf("= %d bytes:\n", length);
 
         hex_dump(response->value_bytes, length, HEX_DUMP_FLAG_TAB);
     }
@@ -4274,7 +4274,7 @@ void check_cell_signal(){
     if (xbee_cell_connected && (millis() - signal_strength_timer > signal_strength_timer_threshold )){
         signal_strength_timer = millis();
         
-        //MONITOR.println("Checking Cell Signal");
+        MONITOR.println("Checking Cell Signal");
         String str = "atdb";
         //MONITOR.println("Sending:" + str);
         
@@ -4282,12 +4282,13 @@ void check_cell_signal(){
     }
 
     if (last_at_cmd.commandstr[0] == 'd' && last_at_cmd.commandstr[1] == 'b' && last_at_cmd.value_received){
-        //MONITOR.println("Received db Response");
+        
         if (xbee_signal_strength_current != last_at_cmd.value){
             xbee_signal_strength_changed = true;
         }
         xbee_signal_strength_current = last_at_cmd.value;
-        
+        MONITOR.printf("Received db Response: %i\n",xbee_signal_strength_current);
+
         last_at_cmd.value_received = false;
 
     }
@@ -5385,7 +5386,7 @@ bool Check_FOTA_DOWNLOAD_DONE()
 {
 	last_packet.processed = true;
 
-	if (fotaOps.getPacketNum() == fotaOps.getTotalPackets()-1)
+	if (fotaOps.getPacketNum() == fotaOps.getTotalPackets())
 	{
 		MONITOR.printf("Received All FOTA Packets: #%i/%i\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets());
 
@@ -5487,13 +5488,13 @@ void FOTA_Loop(){
 				
 				if (fotaOps.getPreviousFOTACode() == FOTACode::FOTA_Fail){
 
-					MONITOR.printf("Retry FOTA Pkt: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets()-1);
+					MONITOR.printf("Retry FOTA Pkt: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets());
 
 				}else{
 					fotaOps.setPacketNum(0);
 				}
 				
-				
+				MONITOR.printf("Requesting packet Number: %i\n",fotaOps.getPacketNum());
               	on_monitor_fota_request_packet(fotaOps.getPacketNum());
 
 				fotaOps.setPreviousFOTACode(fotaOps.getFOTACode());
@@ -5505,7 +5506,7 @@ void FOTA_Loop(){
 				{
 					last_packet.cmd = (COMMAND_ID)NULL;
 					
-					MONITOR.printf("FOTA Pkt Received NACK: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets()-1);
+					MONITOR.printf("FOTA Pkt Received NACK: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets());
 
 					fotaOps.setPreviousFOTACode(FOTACode::FOTA_Fail);
 					fotaOps.setFOTACode(FOTACode::FOTA_Downloading);
@@ -5519,10 +5520,10 @@ void FOTA_Loop(){
 					digitalWrite(XBEE_RESET,LOW);
 
 				}
-				else if (fotaOps.getPacketNum() > fotaOps.getTotalPackets()-1){
+				else if (fotaOps.getPacketNum() > fotaOps.getTotalPackets()){
 
 					
-					MONITOR.printf("FOTA Downloading: Packet Overflow: Total Packets: #%d Received: #%d\n",fotaOps.getTotalPackets(),fotaOps.getPacketNum()+1);
+					MONITOR.printf("FOTA Downloading: Packet Overflow: Total Packets: #%d Received: #%d\n",fotaOps.getTotalPackets(),fotaOps.getPacketNum());
 					fotaOps.setFOTACode(FOTACode::FOTA_Fail);
 
 				}
@@ -5530,7 +5531,7 @@ void FOTA_Loop(){
 				{
 					last_packet.cmd = (COMMAND_ID)NULL;
 					
-					MONITOR.printf("Writing FOTA Pkt: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets()-1);
+					MONITOR.printf("Writing FOTA Pkt: #%d/%d\n",fotaOps.getPacketNum(),fotaOps.getTotalPackets());
 
 					if(ESP_OK!=esp_ota_write(ota_handle,update_data.data,(size_t)update_data.size)) {
 						MONITOR.println("Failed to open file for appending");
@@ -5539,7 +5540,7 @@ void FOTA_Loop(){
 					}
 					else{
 						
-						if (fotaOps.getPacketNum() < fotaOps.getTotalPackets()-1){
+						if (fotaOps.getPacketNum() < fotaOps.getTotalPackets()){
 							fotaOps.incPacketNum();
 							
 							MONITOR.printf("Requesting packet Number: %i\n",fotaOps.getPacketNum());
@@ -5863,13 +5864,15 @@ void loop() {
         }else if (last_packet.status == STATUS_CODE::XBEE_CELL_CONNECTED){
             
             MONITOR.println("XBEE Cell Connected");
-             xbee_cell_connected = true;
+            xbee_cell_connected = true;
             
+			signal_strength_timer = millis();
+
             //send_init_packet();
             String blank;
-            // on_monitor_connect(blank.c_str());
-            // on_monitor_subscribe_command(blank.c_str());
-            // on_monitor_subscribe_config(blank.c_str());
+            on_monitor_connect(blank.c_str());
+            //on_monitor_subscribe_command(blank.c_str());
+            //on_monitor_subscribe_config(blank.c_str());
 
             last_packet.cmd = (COMMAND_ID)NULL;
             last_packet.status = (STATUS_CODE)NULL;
@@ -5879,7 +5882,7 @@ void loop() {
     }
 	
 
-    // check_cell_signal();
+    //check_cell_signal();
 
 	//MONITOR.printf("Display Update\n");
     display_update();
@@ -5904,31 +5907,31 @@ void loop() {
 	
 
 	//MONITOR.printf("Calling AceCON Dev Tick\n");
-    acecon_dev_tick();
+    //acecon_dev_tick();
 
 	Update_Timers();
 
 	vTaskDelay(5);
 
 	//MONITOR.printf("PLACEHOLDER:Checking Door Condition\n");
-	check_door_condition();
+	//check_door_condition();
 
 	//MONITOR.printf("ui_update_ACECON\n");
-	ui_update_acecon();
+	//ui_update_acecon();
 	
 	//================================================== State Machine Logic =========================================*/
 	
-	Process_System_Alarm_States();
+	//Process_System_Alarm_States();
 
-	Process_State_Machine();
+	//Process_State_Machine();
 
-	ui_update_icons();
+	//ui_update_icons();
 
 	if (MainLoop_Timer.checkOverflow()){
 
 		MainLoop_Timer.startTimer();
 
-		MONITOR.println("================== LOOP A ====================");
+		MONITOR.println("================== LOOP B ====================");
 
 		
 
