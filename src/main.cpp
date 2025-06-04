@@ -5870,7 +5870,7 @@ void loop() {
 
             //send_init_packet();
             String blank;
-            on_monitor_connect(blank.c_str());
+            //on_monitor_connect(blank.c_str());
             //on_monitor_subscribe_command(blank.c_str());
             //on_monitor_subscribe_config(blank.c_str());
 
@@ -5931,7 +5931,7 @@ void loop() {
 
 		MainLoop_Timer.startTimer();
 
-		MONITOR.println("================== LOOP B ====================");
+		MONITOR.println("================== LOOP A ====================");
 
 		
 
